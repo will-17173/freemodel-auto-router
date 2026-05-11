@@ -37,7 +37,7 @@ export function ApiKeyModal({ providerName, currentKey, onSave, onClose }: Props
         }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#ffffff" }}>
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--fm-color-ink)" }}>
                 <path d="M11 1a3 3 0 013 3 3 3 0 01-3 3 3 3 0 01-2.83-2H3l-1 1-1-1 1-1H2V3h1V2h1l1-1h3.17A3 3 0 0111 1z"/>
                 <circle cx="11" cy="4" r="1" fill="currentColor" stroke="none"/>
               </svg>
@@ -45,7 +45,7 @@ export function ApiKeyModal({ providerName, currentKey, onSave, onClose }: Props
             </div>
             <p className="fm-body-sm" style={{
               margin: "0 0 0 25px",
-              color: "#ffffff",
+              color: "var(--fm-ink-muted)",
             }}>
               {providerName}
             </p>
@@ -61,18 +61,18 @@ export function ApiKeyModal({ providerName, currentKey, onSave, onClose }: Props
               borderRadius: "var(--fm-radius-full)",
               border: "none",
               background: "transparent",
-              color: "#ffffff",
+              color: "var(--fm-color-ink)",
               cursor: "pointer",
               transition: "background 0.15s, color 0.15s",
               flexShrink: 0,
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.09)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#ffffff";
+              (e.currentTarget as HTMLButtonElement).style.background = "var(--fm-ink-hover-bg)";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-color-ink)";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-              (e.currentTarget as HTMLButtonElement).style.color = "#ffffff";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-color-ink)";
             }}
             aria-label="关闭"
           >
@@ -110,15 +110,15 @@ export function ApiKeyModal({ providerName, currentKey, onSave, onClose }: Props
                 transform: "translateY(-50%)",
                 background: "none",
                 border: "none",
-                color: "#ffffff",
+                color: "var(--fm-color-ink)",
                 cursor: "pointer",
                 padding: "3px 4px",
                 fontWeight: 500,
                 transition: "color 0.15s",
                 letterSpacing: "0.40px",
               }}
-              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#ffffff"; }}
-              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#ffffff"; }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-magenta)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-color-ink)"; }}
             >
               {show ? "隐藏" : "显示"}
             </button>

@@ -85,8 +85,8 @@ export default function App() {
   if (!config) return (
     <div style={{ background: "var(--fm-color-canvas)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "#ffffff", animation: "pulse 2s infinite" }} />
-        <span className="fm-eyebrow" style={{ color: "#ffffff" }}>初始化中…</span>
+        <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: "var(--fm-color-ink)", animation: "pulse 2s infinite" }} />
+        <span className="fm-eyebrow">初始化中…</span>
       </div>
     </div>
   );
@@ -166,7 +166,7 @@ export default function App() {
 
       {/* Top Nav */}
       <div className="fm-top-nav" style={{
-        padding: "0 20px",
+        padding: "0 24px",
         height: "56px",
         display: "flex",
         alignItems: "center",
@@ -191,13 +191,13 @@ export default function App() {
               width: "10px",
               height: "10px",
               borderRadius: "50%",
-              background: isActive ? "var(--fm-success)" : "#888888",
+              background: isActive ? "var(--fm-success)" : "var(--fm-ink-faint)",
               transition: "background 0.5s",
             }} />
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
             <span className="fm-headline-sm" style={{ fontWeight: 700 }}>freemodel</span>
-            <span className="fm-eyebrow" style={{ color: "#ffffff" }}>router</span>
+            <span className="fm-eyebrow" style={{ color: "var(--fm-ink-muted)" }}>router</span>
           </div>
         </div>
 
@@ -211,9 +211,9 @@ export default function App() {
             padding: "6px 12px",
             border: "1px solid var(--fm-color-hairline)",
           }}>
-            <span className="fm-caption" style={{ color: "#ffffff" }}>服务器状态</span>
+            <span className="fm-caption">服务器状态</span>
             <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--fm-success)", opacity: 0.7 }} />
-            <span className="fm-caption" style={{ color: "#ffffff" }}>:7860</span>
+            <span className="fm-caption" style={{ fontFamily: "var(--fm-font-mono)" }}>:7860</span>
           </div>
 
           {/* Proxy inject toggle */}
@@ -226,7 +226,7 @@ export default function App() {
               background: "var(--fm-color-surface-soft)",
               borderRadius: "8px",
               padding: "6px 12px",
-              border: `1px solid ${proxyEnabled ? "var(--fm-success)" : "var(--fm-color-hairline)"}`,
+              border: `1px solid ${proxyEnabled ? "var(--fm-color-primary)" : "var(--fm-color-hairline)"}`,
               cursor: isActive ? "pointer" : "not-allowed",
               opacity: isActive ? 1 : 0.45,
               transition: "border-color 0.2s, opacity 0.2s",
@@ -253,7 +253,7 @@ export default function App() {
               width: "28px",
               height: "16px",
               borderRadius: "8px",
-              background: proxyEnabled ? "var(--fm-success)" : "#888888",
+              background: proxyEnabled ? "var(--fm-color-primary)" : "var(--fm-ink-faint)",
               transition: "background 0.2s",
               flexShrink: 0,
             }}>
@@ -264,12 +264,12 @@ export default function App() {
                 width: "12px",
                 height: "12px",
                 borderRadius: "50%",
-                background: "var(--fm-color-canvas)",
+                background: proxyEnabled ? "var(--fm-color-on-primary)" : "var(--fm-color-canvas)",
                 transition: "left 0.2s",
               }} />
             </div>
             <span className="fm-caption" style={{
-              color: proxyEnabled ? "var(--fm-success)" : "#ffffff",
+              color: proxyEnabled ? "var(--fm-color-primary)" : "var(--fm-color-ink)",
               transition: "color 0.2s",
             }}>
               {proxyEnabled ? "已接入" : "接入 CC"}
@@ -304,21 +304,29 @@ export default function App() {
       {/* Active status — color block */}
       <div style={{
         flexShrink: 0,
-        padding: "12px 20px",
+        padding: "20px 24px 12px",
         borderBottom: "1px solid var(--fm-color-hairline)",
-        background: isActive ? "var(--fm-block-lime)" : "var(--fm-color-surface-soft)",
+        background: "var(--fm-color-canvas)",
         transition: "background 0.3s",
       }}>
         {isActive ? (
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            background: "var(--fm-block-lime)",
+            borderRadius: "24px",
+            padding: "22px 24px",
+            border: "1.5px solid rgba(0,0,0,0.14)",
+          }}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span className="fm-eyebrow" style={{ color: "#ffffff" }}>当前路由</span>
-              <div style={{ width: "1px", height: "14px", background: "#888888" }} />
-              <span className="fm-body-sm" style={{ fontWeight: 600, color: "#ffffff" }}>{activeProvider!.name}</span>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#ffffff" }}>
+              <span className="fm-eyebrow">当前路由</span>
+              <div style={{ width: "1px", height: "18px", background: "rgba(0,0,0,0.22)" }} />
+              <span className="fm-body-sm" style={{ fontWeight: 700 }}>{activeProvider!.name}</span>
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--fm-color-ink)" }}>
                 <path d="M9 3l5 5-5 5M2 8h12"/>
               </svg>
-              <span className="fm-body-sm" style={{ color: "#ffffff" }}>{activeModel!.name}</span>
+              <span className="fm-body-sm">{activeModel!.name}</span>
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
               <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "var(--fm-success)" }} />
@@ -326,11 +334,19 @@ export default function App() {
             </div>
           </div>
         ) : (
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#aaaaaa" }}>
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            background: "var(--fm-color-surface-soft)",
+            borderRadius: "20px",
+            padding: "18px 20px",
+            border: "1px solid var(--fm-color-hairline)",
+          }}>
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--fm-ink-faint)" }}>
               <circle cx="8" cy="8" r="6"/><path d="M8 5v3M8 11h.01"/>
             </svg>
-            <span className="fm-body-sm" style={{ color: "#ffffff" }}>队列为空，尚未路由任何请求</span>
+            <span className="fm-body-sm">队列为空，尚未路由任何请求</span>
           </div>
         )}
       </div>
@@ -344,12 +360,13 @@ export default function App() {
       />
 
       {/* Provider grid header */}
-      <div style={{ padding: "16px 20px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+      <div style={{ padding: "24px 24px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span className="fm-eyebrow" style={{ color: "#ffffff" }}>供应商</span>
+          <span className="fm-eyebrow">供应商</span>
           <span className="fm-caption" style={{
-            color: "#ffffff",
-            background: "rgba(255,255,255,0.07)",
+            color: "var(--fm-color-ink)",
+            background: "var(--fm-color-surface-soft)",
+            border: "1px solid var(--fm-color-hairline)",
             borderRadius: "999px",
             padding: "2px 8px",
             fontFamily: "var(--fm-font-mono)",
@@ -374,8 +391,8 @@ export default function App() {
         flex: 1,
         padding: "0 16px 16px",
         display: "grid",
-        gridTemplateColumns: "1fr 1fr",
-        gap: "12px",
+        gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+        gap: "14px",
         alignContent: "start",
       }}>
         {config.providers.map((p) => (
@@ -396,32 +413,32 @@ export default function App() {
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            minHeight: "108px",
+            minHeight: "132px",
             gap: "8px",
             background: "transparent",
             cursor: "pointer",
             transition: "border-color 0.2s, background 0.2s",
           }}
           onMouseEnter={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.borderColor = "#ffffff";
-            (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.07)";
+            (e.currentTarget as HTMLButtonElement).style.borderColor = "#000000";
+            (e.currentTarget as HTMLButtonElement).style.background = "var(--fm-color-surface-soft)";
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--fm-color-hairline)";
             (e.currentTarget as HTMLButtonElement).style.background = "transparent";
           }}
         >
-          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: "#aaaaaa" }}>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: "var(--fm-ink-faint)" }}>
             <path d="M8 2v12M2 8h12"/>
           </svg>
-          <span className="fm-caption" style={{ color: "#aaaaaa", textTransform: "uppercase", letterSpacing: "0.7px" }}>添加供应商</span>
+          <span className="fm-caption" style={{ color: "var(--fm-ink-faint)", textTransform: "uppercase", letterSpacing: "0.7px" }}>添加供应商</span>
         </button>
       </div>
 
       {/* Footer */}
       <div style={{
         borderTop: "1px solid var(--fm-color-hairline)",
-        padding: "10px 20px",
+        padding: "12px 24px",
         display: "flex",
         justifyContent: "space-between",
         alignItems: "center",
@@ -429,11 +446,11 @@ export default function App() {
         background: "var(--fm-color-surface-soft)",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          <span className="fm-caption" style={{ color: "#ffffff", fontFamily: "var(--fm-font-mono)" }}>重试 {config.retry.max_retries}×</span>
-          <span className="fm-caption" style={{ color: "#aaaaaa" }}>·</span>
-          <span className="fm-caption" style={{ color: "#ffffff", fontFamily: "var(--fm-font-mono)" }}>间隔 {config.retry.retry_delay_secs}s</span>
+          <span className="fm-caption" style={{ fontFamily: "var(--fm-font-mono)" }}>重试 {config.retry.max_retries}×</span>
+          <span className="fm-caption" style={{ color: "var(--fm-ink-faint)" }}>·</span>
+          <span className="fm-caption" style={{ fontFamily: "var(--fm-font-mono)" }}>间隔 {config.retry.retry_delay_secs}s</span>
         </div>
-        <span className="fm-caption" style={{ color: "#aaaaaa", fontFamily: "var(--fm-font-mono)" }}>v0.1.0</span>
+        <span className="fm-caption" style={{ color: "var(--fm-ink-faint)", fontFamily: "var(--fm-font-mono)" }}>v0.1.0</span>
       </div>
 
       {showSettings && (

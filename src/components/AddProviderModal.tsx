@@ -84,12 +84,12 @@ export function AddProviderModal({ onSave, onClose }: Props) {
         }}>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "4px" }}>
-              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ color: "#ffffff" }}>
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" style={{ color: "var(--fm-color-ink)" }}>
                 <path d="M8 2v12M2 8h12"/>
               </svg>
               <span className="fm-headline-sm">添加供应商</span>
             </div>
-            <p className="fm-body-sm" style={{ margin: "0 0 0 25px", color: "#ffffff" }}>
+            <p className="fm-body-sm" style={{ margin: "0 0 0 25px", color: "var(--fm-ink-muted)" }}>
               仅支持 Anthropic 协议，Base URL 需兼容 Anthropic Messages API。
             </p>
           </div>
@@ -104,7 +104,7 @@ export function AddProviderModal({ onSave, onClose }: Props) {
               borderRadius: "var(--fm-radius-full)",
               border: "none",
               background: "transparent",
-              color: "#ffffff",
+              color: "var(--fm-color-ink)",
               cursor: "pointer",
               flexShrink: 0,
             }}
@@ -172,7 +172,7 @@ export function AddProviderModal({ onSave, onClose }: Props) {
                   lineHeight: 1.5,
                 }}
               />
-              <span className="fm-caption" style={{ display: "block", marginTop: "8px", color: "#aaaaaa" }}>
+              <span className="fm-caption" style={{ display: "block", marginTop: "8px", color: "var(--fm-ink-muted)" }}>
                 一行一个模型，也支持用英文逗号分隔。将按 Anthropic 协议转发请求。
               </span>
             </label>
@@ -184,7 +184,7 @@ export function AddProviderModal({ onSave, onClose }: Props) {
             justifyContent: "space-between",
             gap: "12px",
           }}>
-            <span className="fm-caption" style={{ color: error ? "var(--fm-warning)" : "#aaaaaa" }}>
+            <span className="fm-caption" style={{ color: error ? "var(--fm-warning)" : "var(--fm-ink-muted)" }}>
               {error || `将添加 ${modelIds.length} 个模型`}
             </span>
             <button

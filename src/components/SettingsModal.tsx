@@ -34,7 +34,7 @@ export function SettingsModal({ retry, onSave, onClose }: Props) {
           borderBottom: "1px solid var(--fm-color-hairline)",
         }}>
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#ffffff" }}>
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--fm-color-ink)" }}>
               <circle cx="8" cy="8" r="2.5"/>
               <path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3.05 3.05l1.06 1.06M11.89 11.89l1.06 1.06M3.05 12.95l1.06-1.06M11.89 4.11l1.06-1.06"/>
             </svg>
@@ -51,17 +51,17 @@ export function SettingsModal({ retry, onSave, onClose }: Props) {
               borderRadius: "var(--fm-radius-full)",
               border: "none",
               background: "transparent",
-              color: "#ffffff",
+              color: "var(--fm-color-ink)",
               cursor: "pointer",
               transition: "background 0.15s, color 0.15s",
             }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLButtonElement).style.background = "rgba(255,255,255,0.09)";
-              (e.currentTarget as HTMLButtonElement).style.color = "#ffffff";
+              (e.currentTarget as HTMLButtonElement).style.background = "var(--fm-ink-hover-bg)";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-color-ink)";
             }}
             onMouseLeave={(e) => {
               (e.currentTarget as HTMLButtonElement).style.background = "transparent";
-              (e.currentTarget as HTMLButtonElement).style.color = "#ffffff";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-color-ink)";
             }}
             aria-label="关闭"
           >
@@ -77,7 +77,7 @@ export function SettingsModal({ retry, onSave, onClose }: Props) {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
             <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-              <span className="fm-body" style={{ color: "#ffffff" }}>最大重试次数</span>
+              <span className="fm-body">最大重试次数</span>
               <input
                 type="number"
                 min={0}
@@ -90,7 +90,7 @@ export function SettingsModal({ retry, onSave, onClose }: Props) {
             </label>
 
             <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-              <span className="fm-body" style={{ color: "#ffffff" }}>重试间隔（秒）</span>
+              <span className="fm-body">重试间隔（秒）</span>
               <input
                 type="number"
                 min={0}

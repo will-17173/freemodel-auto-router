@@ -18,9 +18,9 @@ export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: 
           top: 0,
           left: "24px",
           right: "24px",
-          height: "2px",
+          height: "4px",
           borderRadius: "0 0 2px 2px",
-          background: "#ffffff",
+          background: "var(--fm-color-primary)",
         }} />
       )}
 
@@ -31,11 +31,11 @@ export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: 
             {isActive && (
               <div style={{
                 width: "7px", height: "7px", borderRadius: "50%",
-                background: "#4ade80", flexShrink: 0,
+                background: "var(--fm-success)", flexShrink: 0,
               }} />
             )}
             <span style={{
-              fontSize: "20px", fontWeight: 700, color: "#ffffff",
+              fontSize: "20px", fontWeight: 700, color: "var(--fm-color-ink)",
               overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
               {provider.name}
@@ -51,9 +51,9 @@ export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: 
             fontSize: "14px", fontWeight: 500,
             borderRadius: "999px",
             padding: "7px 14px",
-            border: "1.5px solid #48484f",
-            background: "#1a1a1f",
-            color: "#ffffff",
+            border: "1.5px solid var(--fm-color-hairline)",
+            background: "var(--fm-color-surface-soft)",
+            color: "var(--fm-color-ink)",
             cursor: "pointer",
             flexShrink: 0, marginLeft: "8px",
           } : {
@@ -62,8 +62,8 @@ export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: 
             fontSize: "14px", fontWeight: 500,
             borderRadius: "999px",
             padding: "7px 14px",
-            border: "1.5px solid #d97706",
-            background: "#292110",
+            border: "1.5px solid rgba(245,158,11,0.45)",
+            background: "rgba(245,158,11,0.14)",
             color: "#fbbf24",
             cursor: "pointer",
             flexShrink: 0, marginLeft: "8px",
@@ -95,7 +95,7 @@ export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: 
           fontFamily: "var(--fm-font-mono)",
           fontSize: "13px", fontWeight: 500,
           letterSpacing: "0.8px", textTransform: "uppercase" as const,
-          color: "#ffffff",
+          color: "var(--fm-color-ink)",
           marginBottom: "10px",
         }}>
           模型
@@ -112,9 +112,9 @@ export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: 
                 fontSize: "14px", fontWeight: 500,
                 borderRadius: "999px",
                 padding: "7px 14px 8px",
-                border: "1.5px solid #58585f",
-                background: "#222228",
-                color: "#ffffff",
+                border: "1.5px solid var(--fm-color-hairline)",
+                background: hasKey ? "var(--fm-color-surface-soft)" : "#ffffff",
+                color: "var(--fm-color-ink)",
                 cursor: hasKey ? "pointer" : "not-allowed",
                 display: "inline-flex", alignItems: "center", gap: "5px",
                 opacity: hasKey ? 1 : 0.55,
@@ -129,7 +129,7 @@ export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: 
             </button>
           ))}
           {provider.models.length === 0 && (
-            <span style={{ fontSize: "15px", color: "#ffffff", fontStyle: "italic" }}>暂无模型</span>
+            <span style={{ fontSize: "15px", color: "var(--fm-ink-faint)", fontStyle: "italic" }}>暂无模型</span>
           )}
         </div>
       </div>

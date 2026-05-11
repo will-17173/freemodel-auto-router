@@ -45,8 +45,8 @@ export function ProxyLogPanel({ onClose }: ProxyLogPanelProps) {
           gap: "12px",
         }}>
           <div>
-            <div className="fm-eyebrow" style={{ color: "#ffffff" }}>代理日志</div>
-            <div className="fm-caption" style={{ color: "#aaaaaa", marginTop: "6px" }}>
+            <div className="fm-eyebrow">代理日志</div>
+            <div className="fm-caption" style={{ color: "var(--fm-ink-muted)", marginTop: "6px" }}>
               GET localhost:7860/logs · 最近 {logs.length} 条
             </div>
           </div>
@@ -55,7 +55,7 @@ export function ProxyLogPanel({ onClose }: ProxyLogPanelProps) {
 
         <div style={{ overflow: "auto", padding: "14px", background: "var(--fm-color-canvas)" }}>
           {logs.length === 0 ? (
-            <div className="fm-body-sm" style={{ color: "#aaaaaa", padding: "22px" }}>
+            <div className="fm-body-sm" style={{ color: "var(--fm-ink-muted)", padding: "22px" }}>
               还没有代理请求日志。向 localhost:7860 发起请求后会显示在这里。
             </div>
           ) : (
@@ -85,11 +85,11 @@ function LogRow({ entry }: { entry: ProxyLogEntry }) {
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <LevelBadge level={entry.level} color={tone.accent} label={tone.label} />
-          <span className="fm-body-sm" style={{ color: "#ffffff", fontWeight: 600 }}>
+          <span className="fm-body-sm" style={{ fontWeight: 600 }}>
             {entry.message}
           </span>
         </div>
-        <span className="fm-caption" style={{ color: "#aaaaaa", whiteSpace: "nowrap" }}>
+        <span className="fm-caption" style={{ color: "var(--fm-ink-muted)", whiteSpace: "nowrap" }}>
           {formatTime(entry.timestamp_ms)}
         </span>
       </div>
@@ -104,8 +104,8 @@ function LogRow({ entry }: { entry: ProxyLogEntry }) {
                 border: "1px solid var(--fm-color-hairline)",
                 borderRadius: "999px",
                 padding: "5px 8px",
-                background: "rgba(255,255,255,0.04)",
-                color: key === "status" ? tone.accent : "#ffffff",
+                background: "#ffffff",
+                color: key === "status" ? tone.accent : "var(--fm-color-ink)",
               }}
             >
               {key}={value || "-"}
@@ -127,7 +127,7 @@ function LevelBadge({ level, color, label }: { level: ProxyLogLevel; color: stri
         border: `1px solid ${color}`,
         borderRadius: "999px",
         padding: "4px 7px",
-        background: "rgba(0,0,0,0.20)",
+        background: "#ffffff",
       }}
     >
       {label}/{level}

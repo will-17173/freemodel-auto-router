@@ -53,7 +53,7 @@ function SortableQueueItem({
       {/* Priority number */}
       <span className="fm-caption" style={{
         fontWeight: 600,
-        color: "#ffffff",
+        color: "var(--fm-color-ink)",
         minWidth: "14px",
         textAlign: "center",
         flexShrink: 0,
@@ -66,7 +66,7 @@ function SortableQueueItem({
         {...attributes}
         {...listeners}
         style={{
-          color: "#ffffff",
+          color: "var(--fm-ink-faint)",
           cursor: "grab",
           flexShrink: 0,
           display: "flex",
@@ -81,7 +81,7 @@ function SortableQueueItem({
         </svg>
       </span>
 
-      <span className="fm-body-sm" style={{ fontWeight: 500, color: "#ffffff" }}>
+      <span className="fm-body-sm" style={{ fontWeight: 500 }}>
         {label}
       </span>
 
@@ -89,7 +89,7 @@ function SortableQueueItem({
         onClick={() => onRemove(index)}
         style={{
           marginLeft: "2px",
-          color: "#ffffff",
+          color: "var(--fm-ink-faint)",
           background: "none",
           border: "none",
           cursor: "pointer",
@@ -99,8 +99,8 @@ function SortableQueueItem({
           flexShrink: 0,
           transition: "color 0.15s",
         }}
-        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#cc0000"; }}
-        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "#ffffff"; }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-magenta)"; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-ink-faint)"; }}
         aria-label="从队列移除"
       >
         <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -138,19 +138,20 @@ export function QueuePanel({ queue, providers, onReorder, onRemove }: Props) {
 
   return (
     <div style={{
-      padding: "14px 20px 16px",
+      padding: "12px 24px 18px",
       borderBottom: "1px solid var(--fm-color-hairline)",
       background: "var(--fm-color-surface-soft)",
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-          <span className="fm-eyebrow" style={{ color: "#ffffff" }}>路由队列</span>
-          <span className="fm-caption" style={{ color: "#ffffff" }}>故障自动切换</span>
+          <span className="fm-eyebrow">路由队列</span>
+          <span className="fm-caption" style={{ color: "var(--fm-ink-muted)" }}>故障自动切换</span>
         </div>
         {queue.length > 0 && (
           <span className="fm-caption" style={{
-            color: "#ffffff",
-            background: "rgba(255,255,255,0.09)",
+            color: "var(--fm-color-ink)",
+            background: "#ffffff",
+            border: "1px solid var(--fm-color-hairline)",
             borderRadius: "var(--fm-radius-full)",
             padding: "2px 8px",
             fontWeight: 500,
@@ -162,10 +163,10 @@ export function QueuePanel({ queue, providers, onReorder, onRemove }: Props) {
 
       {queue.length === 0 ? (
         <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 0" }}>
-          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "#aaaaaa" }}>
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--fm-ink-faint)" }}>
             <path d="M2 4h12M2 8h8M2 12h5"/>
           </svg>
-          <span className="fm-body-sm" style={{ color: "#ffffff" }}>
+          <span className="fm-body-sm">
             点击模型旁的 + 添加到队列
           </span>
         </div>
