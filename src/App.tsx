@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
+import { sendNotification } from "@tauri-apps/plugin-notification";
 import {
   DndContext,
   closestCenter,
@@ -41,6 +43,16 @@ export default function App() {
 
   useEffect(() => {
     getConfig().then(setConfig);
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<string>("provider-switched", (e) => {
+      sendNotification({
+        title: "freemodel router",
+        body: `已切换到 ${e.payload}`,
+      });
+    });
+    return () => { unlisten.then(f => f()); };
   }, []);
 
   const sensors = useSensors(useSensor(PointerSensor));
