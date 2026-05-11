@@ -3,20 +3,27 @@ import type { RetryConfig } from "../types";
 
 interface Props {
   retry: RetryConfig;
-  onSave: (retry: RetryConfig) => void;
+  port: number;
+  onSave: (retry: RetryConfig, port: number, portChanged: boolean) => void;
   onClose: () => void;
 }
 
-export function SettingsModal({ retry, onSave, onClose }: Props) {
+export function SettingsModal({ retry, port, onSave, onClose }: Props) {
   const [maxRetries, setMaxRetries] = useState(String(retry.max_retries));
   const [retryDelay, setRetryDelay] = useState(String(retry.retry_delay_secs));
+  const [portValue, setPortValue] = useState(String(port));
+  const [restarting, setRestarting] = useState(false);
 
   function handleSave() {
     const max = parseInt(maxRetries, 10);
     const delay = parseInt(retryDelay, 10);
-    if (isNaN(max) || isNaN(delay) || max < 0 || delay < 0) return;
-    onSave({ max_retries: max, retry_delay_secs: delay });
-    onClose();
+    const newPort = parseInt(portValue, 10);
+    if (isNaN(max) || isNaN(delay) || isNaN(newPort) || max < 0 || delay < 0 || newPort < 1 || newPort > 65535) return;
+
+    const portChanged = newPort !== port;
+    if (portChanged) setRestarting(true);
+    onSave({ max_retries: max, retry_delay_secs: delay }, newPort, portChanged);
+    if (!portChanged) onClose();
   }
 
   return (
@@ -73,6 +80,23 @@ export function SettingsModal({ retry, onSave, onClose }: Props) {
 
         {/* Body */}
         <div style={{ padding: "20px 24px 24px" }}>
+          <div className="fm-section-eyebrow" style={{ marginBottom: "14px" }}>代理服务</div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
+            <label style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
+              <span className="fm-body">监听端口</span>
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={portValue}
+                onChange={(e) => setPortValue(e.target.value)}
+                className="fm-input"
+                style={{ width: "90px", textAlign: "right", fontFamily: "var(--fm-font-mono)", fontSize: "14px" }}
+              />
+            </label>
+          </div>
+
           <div className="fm-section-eyebrow" style={{ marginBottom: "14px" }}>失败重试</div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginBottom: "20px" }}>
@@ -106,9 +130,10 @@ export function SettingsModal({ retry, onSave, onClose }: Props) {
           <button
             onClick={handleSave}
             className="fm-btn-primary"
-            style={{ width: "100%", justifyContent: "center", padding: "11px 20px", fontSize: "14px" }}
+            disabled={restarting}
+            style={{ width: "100%", justifyContent: "center", padding: "11px 20px", fontSize: "14px", opacity: restarting ? 0.6 : 1 }}
           >
-            保存
+            {restarting ? "重启服务中…" : "保存"}
           </button>
         </div>
       </div>

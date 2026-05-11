@@ -74,17 +74,22 @@ pub struct QueueItem {
     pub model_id: String,
 }
 
+fn default_port() -> u16 { 7860 }
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub providers: Vec<Provider>,
     pub retry: RetryConfig,
     #[serde(default)]
     pub queue: Vec<QueueItem>,
+    #[serde(default = "default_port")]
+    pub port: u16,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
+            port: default_port(),
             providers: vec![Provider {
                 id: "openrouter".to_owned(),
                 name: "OpenRouter".to_owned(),

@@ -3,10 +3,11 @@ import { getProxyLogs } from "../api";
 import type { ProxyLogEntry, ProxyLogLevel } from "../types";
 
 interface ProxyLogPanelProps {
+  port: number;
   onClose: () => void;
 }
 
-export function ProxyLogPanel({ onClose }: ProxyLogPanelProps) {
+export function ProxyLogPanel({ port, onClose }: ProxyLogPanelProps) {
   const [logs, setLogs] = useState<ProxyLogEntry[]>([]);
 
   useEffect(() => {
@@ -47,7 +48,7 @@ export function ProxyLogPanel({ onClose }: ProxyLogPanelProps) {
           <div>
             <div className="fm-eyebrow">代理日志</div>
             <div className="fm-caption" style={{ color: "var(--fm-ink-muted)", marginTop: "6px" }}>
-              GET localhost:7860/logs · 最近 {logs.length} 条
+              GET localhost:{port}/logs · 最近 {logs.length} 条
             </div>
           </div>
           <button className="fm-btn-secondary" onClick={onClose}>关闭</button>
@@ -56,7 +57,7 @@ export function ProxyLogPanel({ onClose }: ProxyLogPanelProps) {
         <div style={{ overflow: "auto", padding: "14px", background: "var(--fm-color-canvas)" }}>
           {logs.length === 0 ? (
             <div className="fm-body-sm" style={{ color: "var(--fm-ink-muted)", padding: "22px" }}>
-              还没有代理请求日志。向 localhost:7860 发起请求后会显示在这里。
+              还没有代理请求日志。向 localhost:{port} 发起请求后会显示在这里。
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>

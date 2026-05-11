@@ -8,6 +8,7 @@ import {
   updateActive,
   restoreBackup,
   isInjected,
+  restartProxy,
 } from "./api";
 import { ProviderCard } from "./components/ProviderCard";
 import { QueuePanel } from "./components/QueuePanel";
@@ -51,8 +52,11 @@ export default function App() {
 
   useEffect(() => {
     getConfig().then(setConfig);
-    isInjected().then(setProxyEnabled).catch(console.error);
   }, []);
+
+  useEffect(() => {
+    if (config) isInjected(config.port).then(setProxyEnabled).catch(console.error);
+  }, [config?.port]);
 
   useEffect(() => {
     const unlisten = listen<string>("provider-switched", (e) => {
@@ -213,7 +217,7 @@ export default function App() {
           }}>
             <span className="fm-caption">服务器状态</span>
             <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--fm-success)", opacity: 0.7 }} />
-            <span className="fm-caption" style={{ fontFamily: "var(--fm-font-mono)" }}>:7860</span>
+            <span className="fm-caption" style={{ fontFamily: "var(--fm-font-mono)" }}>:{config.port}</span>
           </div>
 
           {/* Proxy inject toggle */}
@@ -237,7 +241,7 @@ export default function App() {
               const next = !proxyEnabled;
               try {
                 if (next) {
-                  await injectProxy(activeProvider!.api_key, activeModel!.id);
+                  await injectProxy(config.port, activeProvider!.api_key, activeModel!.id);
                 } else {
                   await restoreBackup();
                 }
@@ -301,58 +305,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* Active status — color block */}
-      <div style={{
-        flexShrink: 0,
-        padding: "20px 24px 12px",
-        borderBottom: "1px solid var(--fm-color-hairline)",
-        background: "var(--fm-color-canvas)",
-        transition: "background 0.3s",
-      }}>
-        {isActive ? (
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            background: "var(--fm-block-lime)",
-            borderRadius: "24px",
-            padding: "22px 24px",
-            border: "1.5px solid rgba(0,0,0,0.14)",
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span className="fm-eyebrow">当前路由</span>
-              <div style={{ width: "1px", height: "18px", background: "rgba(0,0,0,0.22)" }} />
-              <span className="fm-body-sm" style={{ fontWeight: 700 }}>{activeProvider!.name}</span>
-              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--fm-color-ink)" }}>
-                <path d="M9 3l5 5-5 5M2 8h12"/>
-              </svg>
-              <span className="fm-body-sm">{activeModel!.name}</span>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: "var(--fm-success)" }} />
-              <span className="fm-caption" style={{ color: "var(--fm-success)", letterSpacing: "0.7px", textTransform: "uppercase" }}>活跃</span>
-            </div>
-          </div>
-        ) : (
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "10px",
-            background: "var(--fm-color-surface-soft)",
-            borderRadius: "20px",
-            padding: "18px 20px",
-            border: "1px solid var(--fm-color-hairline)",
-          }}>
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--fm-ink-faint)" }}>
-              <circle cx="8" cy="8" r="6"/><path d="M8 5v3M8 11h.01"/>
-            </svg>
-            <span className="fm-body-sm">队列为空，尚未路由任何请求</span>
-          </div>
-        )}
-      </div>
-
-      {/* Queue panel */}
-      <QueuePanel
+            <QueuePanel
         queue={config.queue}
         providers={config.providers}
         onReorder={reorderQueue}
@@ -456,13 +409,29 @@ export default function App() {
       {showSettings && (
         <SettingsModal
           retry={config.retry}
-          onSave={(retry) => updateAndSave({ ...config, retry })}
+          port={config.port}
+          onSave={(retry, newPort, portChanged) => {
+            const next = { ...config, retry, port: newPort };
+            updateAndSave(next);
+            if (portChanged) {
+              restartProxy(newPort).then(() => {
+                if (proxyEnabled) {
+                  const head = next.queue[0];
+                  const p = head ? next.providers.find((pr) => pr.id === head.provider_id) : undefined;
+                  if (p && p.api_key.trim()) {
+                    injectProxy(newPort, p.api_key, head.model_id).catch(console.error);
+                  }
+                }
+                setShowSettings(false);
+              }).catch(console.error);
+            }
+          }}
           onClose={() => setShowSettings(false)}
         />
       )}
 
       {showLogs && (
-        <ProxyLogPanel onClose={() => setShowLogs(false)} />
+        <ProxyLogPanel port={config.port} onClose={() => setShowLogs(false)} />
       )}
 
       {showAddProvider && (

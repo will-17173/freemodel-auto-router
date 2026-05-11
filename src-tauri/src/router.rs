@@ -104,6 +104,7 @@ mod tests {
                 provider_id: "first".to_owned(),
                 model_id: "model-a".to_owned(),
             }],
+            port: 7860,
         };
         let second = AppConfig {
             providers: vec![provider("second", "model-b"), provider("third", "model-c")],
@@ -121,6 +122,7 @@ mod tests {
                     model_id: "model-c".to_owned(),
                 },
             ],
+            port: 7860,
         };
 
         let mut router = RouterState::from_config(&first);
@@ -146,6 +148,7 @@ mod tests {
                 provider_id: "first".to_owned(),
                 model_id: "model-a".to_owned(),
             }],
+            port: 7860,
         };
         let mut router = RouterState::from_config(&cfg);
 

@@ -33,6 +33,7 @@ export interface AppConfig {
   providers: Provider[];
   retry: RetryConfig;
   queue: QueueItem[];
+  port: number;
 }
 
 export type ProxyLogLevel = "info" | "warn" | "error";

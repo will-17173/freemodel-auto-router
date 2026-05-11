@@ -6,10 +6,22 @@ mod router;
 
 use std::sync::Arc;
 use tauri::Manager;
+use tokio::sync::{watch, Mutex};
+
+/// Managed state for proxy lifecycle control — wrapped in Arc<Mutex>
+/// so the restart command can replace the shutdown sender.
+struct ProxyHandleInner {
+    shutdown_tx: watch::Sender<bool>,
+    notify_tx: Arc<watch::Sender<String>>,
+    proxy_logs: proxy_log::ProxyLogStore,
+}
+
+struct ProxyHandle(Arc<Mutex<ProxyHandleInner>>);
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let cfg = config::load_config();
+    let port = cfg.port;
     let shared_router = router::new_router(&cfg);
     let proxy_logs = proxy_log::ProxyLogStore::new(200);
 
@@ -20,13 +32,17 @@ pub fn run() {
         .manage(proxy_logs.clone())
         .setup(move |app| {
             let router_clone = shared_router.clone();
-            let proxy_logs = proxy_logs.clone();
+            let proxy_logs_clone = proxy_logs.clone();
             let (notify_tx, mut notify_rx) = tokio::sync::watch::channel(String::new());
             let notify_tx = Arc::new(notify_tx);
+            let (shutdown_tx, shutdown_rx) = tokio::sync::watch::channel(false);
 
             // Start proxy server in background
+            let router_for_proxy = router_clone.clone();
+            let notify_for_proxy = notify_tx.clone();
+            let logs_for_proxy = proxy_logs_clone.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = proxy::start_proxy(router_clone, notify_tx, proxy_logs).await {
+                if let Err(e) = proxy::start_proxy(router_for_proxy, notify_for_proxy, logs_for_proxy, port, shutdown_rx).await {
                     log::error!("proxy error: {e}");
                 }
             });
@@ -42,6 +58,13 @@ pub fn run() {
                     }
                 }
             });
+
+            // Store proxy handle for restart capability
+            app.manage(ProxyHandle(Arc::new(Mutex::new(ProxyHandleInner {
+                shutdown_tx,
+                notify_tx,
+                proxy_logs: proxy_logs_clone,
+            }))));
 
             // System tray
             let _tray = tauri::tray::TrayIconBuilder::new()
@@ -76,6 +99,7 @@ pub fn run() {
             has_backup_cmd,
             is_injected_cmd,
             get_proxy_logs_cmd,
+            restart_proxy_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -100,8 +124,8 @@ async fn save_config_cmd(
 }
 
 #[tauri::command]
-fn inject_proxy_cmd(auth_token: String, model: String) -> Result<(), String> {
-    claude_settings::inject_proxy(proxy::PROXY_PORT, &auth_token, &model).map_err(|e| e.to_string())
+fn inject_proxy_cmd(port: u16, auth_token: String, model: String) -> Result<(), String> {
+    claude_settings::inject_proxy(port, &auth_token, &model).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -125,8 +149,8 @@ fn has_backup_cmd() -> bool {
 }
 
 #[tauri::command]
-fn is_injected_cmd() -> bool {
-    claude_settings::is_injected(proxy::PROXY_PORT)
+fn is_injected_cmd(port: u16) -> bool {
+    claude_settings::is_injected(port)
 }
 
 #[tauri::command]
@@ -134,4 +158,39 @@ fn get_proxy_logs_cmd(
     logs: tauri::State<'_, proxy_log::ProxyLogStore>,
 ) -> Vec<proxy_log::ProxyLogEntry> {
     logs.recent()
+}
+
+#[tauri::command]
+async fn restart_proxy_cmd(
+    port: u16,
+    handle: tauri::State<'_, ProxyHandle>,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    let inner = handle.0.lock().await;
+
+    // Signal the old proxy to shut down
+    inner.shutdown_tx.send(true).map_err(|e| e.to_string())?;
+
+    // Small delay to let the old listener release the port
+    drop(inner);
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    let mut inner = handle.0.lock().await;
+
+    // Create new shutdown channel and restart
+    let (new_shutdown_tx, new_shutdown_rx) = tokio::sync::watch::channel(false);
+    let router_clone = router.inner().clone();
+    let notify_clone = inner.notify_tx.clone();
+    let logs_clone = inner.proxy_logs.clone();
+
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = proxy::start_proxy(router_clone, notify_clone, logs_clone, port, new_shutdown_rx).await {
+            log::error!("proxy restart error: {e}");
+        }
+    });
+
+    // Replace the shutdown sender so future restarts work
+    inner.shutdown_tx = new_shutdown_tx;
+
+    Ok(())
 }

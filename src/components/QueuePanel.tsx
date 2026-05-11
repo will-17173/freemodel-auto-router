@@ -61,6 +61,23 @@ function SortableQueueItem({
         {index + 1}
       </span>
 
+      {/* Current route indicator for first item */}
+      {isFirst && (
+        <span className="fm-caption" style={{
+          background: "var(--fm-success)",
+          color: "#ffffff",
+          borderRadius: "4px",
+          padding: "2px 6px",
+          fontSize: "11px",
+          fontWeight: 600,
+          letterSpacing: "0.6px",
+          textTransform: "uppercase",
+          flexShrink: 0,
+        }}>
+          当前
+        </span>
+      )}
+
       {/* Drag handle */}
       <span
         {...attributes}
@@ -145,7 +162,6 @@ export function QueuePanel({ queue, providers, onReorder, onRemove }: Props) {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span className="fm-eyebrow">路由队列</span>
-          <span className="fm-caption" style={{ color: "var(--fm-ink-muted)" }}>故障自动切换</span>
         </div>
         {queue.length > 0 && (
           <span className="fm-caption" style={{

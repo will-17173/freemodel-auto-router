@@ -11,8 +11,6 @@ use http_body_util::BodyExt;
 use std::sync::Arc;
 use tokio::sync::watch;
 
-pub const PROXY_PORT: u16 = 7860;
-
 #[derive(Clone)]
 pub struct ProxyState {
     pub router: SharedRouter,
@@ -25,6 +23,8 @@ pub async fn start_proxy(
     router: SharedRouter,
     notify_tx: Arc<watch::Sender<String>>,
     logs: ProxyLogStore,
+    port: u16,
+    shutdown_rx: watch::Receiver<bool>,
 ) -> anyhow::Result<()> {
     let client = reqwest::Client::builder().build()?;
 
@@ -40,9 +40,19 @@ pub async fn start_proxy(
         .fallback(any(proxy_handler))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", PROXY_PORT)).await?;
-    log::info!("proxy listening on 127.0.0.1:{}", PROXY_PORT);
-    axum::serve(listener, app).await?;
+    let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", port)).await?;
+    log::info!("proxy listening on 127.0.0.1:{}", port);
+    axum::serve(listener, app)
+        .with_graceful_shutdown(async move {
+            let mut rx = shutdown_rx;
+            loop {
+                let _ = rx.changed().await;
+                if *rx.borrow() {
+                    break;
+                }
+            }
+        })
+        .await?;
     Ok(())
 }
 
