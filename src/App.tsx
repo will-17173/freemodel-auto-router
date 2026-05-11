@@ -6,9 +6,7 @@ import {
   saveConfig,
   injectProxy,
   updateActive,
-  removeProxy,
   restoreBackup,
-  hasBackup,
   isInjected,
 } from "./api";
 import { ProviderCard } from "./components/ProviderCard";
@@ -16,21 +14,44 @@ import { QueuePanel } from "./components/QueuePanel";
 import { SettingsModal } from "./components/SettingsModal";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { ProxyLogPanel } from "./components/ProxyLogPanel";
-import type { AppConfig, QueueItem } from "./types";
+import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
+import type { AppConfig, Provider, QueueItem } from "./types";
 import "./App.css";
+
+function slugifyProviderName(name: string) {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || "custom-provider";
+}
+
+function createProviderId(name: string, providers: Provider[]) {
+  const usedIds = new Set(providers.map((provider) => provider.id));
+  const baseId = slugifyProviderName(name);
+  let id = baseId;
+  let suffix = 2;
+
+  while (usedIds.has(id)) {
+    id = `${baseId}-${suffix}`;
+    suffix += 1;
+  }
+
+  return id;
+}
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
+  const [showAddProvider, setShowAddProvider] = useState(false);
   const [editingKeyProviderId, setEditingKeyProviderId] = useState<string | null>(null);
   const [proxyEnabled, setProxyEnabled] = useState(false);
-  const [backupAvailable, setBackupAvailable] = useState(false);
 
   useEffect(() => {
     getConfig().then(setConfig);
     isInjected().then(setProxyEnabled).catch(console.error);
-    hasBackup().then(setBackupAvailable).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -86,9 +107,7 @@ export default function App() {
     const queue = config!.queue.filter((_, i) => i !== index);
     updateAndSave({ ...config!, queue });
     if (queue.length === 0 && proxyEnabled) {
-      removeProxy()
-        .then(() => hasBackup().then(setBackupAvailable))
-        .catch(console.error);
+      restoreBackup().catch(console.error);
       setProxyEnabled(false);
     }
   }
@@ -102,6 +121,26 @@ export default function App() {
       p.id !== providerId ? p : { ...p, api_key: key }
     );
     updateAndSave({ ...config!, providers });
+  }
+
+  function addProvider(input: AddProviderPayload) {
+    const nextProvider: Provider = {
+      id: createProviderId(input.name, config!.providers),
+      name: input.name,
+      base_url: input.baseUrl,
+      protocol: "Anthropic",
+      auth_scheme: "ApiKey",
+      api_key: input.apiKey,
+      models: input.modelIds.map((modelId) => ({
+        id: modelId,
+        name: modelId,
+        enabled: true,
+      })),
+      enabled: true,
+      priority: Math.max(0, ...config!.providers.map((provider) => provider.priority)) + 1,
+    };
+
+    updateAndSave({ ...config!, providers: [...config!.providers, nextProvider] });
   }
 
   const editingKeyProvider = editingKeyProviderId
@@ -172,6 +211,7 @@ export default function App() {
             padding: "6px 12px",
             border: "1px solid var(--fm-color-hairline)",
           }}>
+            <span className="fm-caption" style={{ color: "#ffffff" }}>服务器状态</span>
             <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: "var(--fm-success)", opacity: 0.7 }} />
             <span className="fm-caption" style={{ color: "#ffffff" }}>:7860</span>
           </div>
@@ -199,10 +239,9 @@ export default function App() {
                 if (next) {
                   await injectProxy(activeProvider!.api_key, activeModel!.id);
                 } else {
-                  await removeProxy();
+                  await restoreBackup();
                 }
                 setProxyEnabled(next);
-                setBackupAvailable(await hasBackup());
               } catch (e) {
                 console.error(e);
               }
@@ -236,33 +275,6 @@ export default function App() {
               {proxyEnabled ? "已接入" : "接入 CC"}
             </span>
           </div>
-
-          {backupAvailable && (
-            <button
-              onClick={async () => {
-                const ok = window.confirm(
-                  "将把 ~/.claude/settings.json 恢复到接入前的状态（还原 ANTHROPIC_BASE_URL 与 ANTHROPIC_AUTH_TOKEN），确定继续？"
-                );
-                if (!ok) return;
-                try {
-                  await restoreBackup();
-                  setProxyEnabled(false);
-                  setBackupAvailable(await hasBackup());
-                } catch (e) {
-                  console.error(e);
-                }
-              }}
-              className="fm-btn-secondary"
-              aria-label="恢复原 Claude Code 配置"
-              title="恢复接入前的 Claude Code 配置"
-            >
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M2 8a6 6 0 1 0 1.76-4.24"/>
-                <path d="M2 2v3.5h3.5"/>
-              </svg>
-              恢复
-            </button>
-          )}
 
           <button
             onClick={() => setShowLogs(true)}
@@ -345,7 +357,11 @@ export default function App() {
             {config.providers.length}
           </span>
         </div>
-        <button className="fm-btn-text" style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+        <button
+          className="fm-btn-text"
+          style={{ display: "flex", alignItems: "center", gap: "5px" }}
+          onClick={() => setShowAddProvider(true)}
+        >
           <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
             <path d="M8 2v12M2 8h12"/>
           </svg>
@@ -372,6 +388,7 @@ export default function App() {
           />
         ))}
         <button
+          onClick={() => setShowAddProvider(true)}
           style={{
             border: "1.5px dashed var(--fm-color-hairline)",
             borderRadius: "24px",
@@ -429,6 +446,13 @@ export default function App() {
 
       {showLogs && (
         <ProxyLogPanel onClose={() => setShowLogs(false)} />
+      )}
+
+      {showAddProvider && (
+        <AddProviderModal
+          onSave={addProvider}
+          onClose={() => setShowAddProvider(false)}
+        />
       )}
 
       {editingKeyProvider && (

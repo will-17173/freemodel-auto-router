@@ -72,16 +72,19 @@ export function ProxyLogPanel({ onClose }: ProxyLogPanelProps) {
 }
 
 function LogRow({ entry }: { entry: ProxyLogEntry }) {
+  const tone = getLogTone(entry);
+
   return (
     <div style={{
-      border: "1px solid var(--fm-color-hairline)",
+      border: `1px solid ${tone.border}`,
       borderRadius: "14px",
-      background: "var(--fm-color-surface-soft)",
+      background: tone.background,
       padding: "12px",
+      boxShadow: `inset 3px 0 0 ${tone.accent}`,
     }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: "12px", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <LevelBadge level={entry.level} />
+          <LevelBadge level={entry.level} color={tone.accent} label={tone.label} />
           <span className="fm-body-sm" style={{ color: "#ffffff", fontWeight: 600 }}>
             {entry.message}
           </span>
@@ -102,7 +105,7 @@ function LogRow({ entry }: { entry: ProxyLogEntry }) {
                 borderRadius: "999px",
                 padding: "5px 8px",
                 background: "rgba(255,255,255,0.04)",
-                color: "#ffffff",
+                color: key === "status" ? tone.accent : "#ffffff",
               }}
             >
               {key}={value || "-"}
@@ -114,15 +117,54 @@ function LogRow({ entry }: { entry: ProxyLogEntry }) {
   );
 }
 
-function LevelBadge({ level }: { level: ProxyLogLevel }) {
-  const color = level === "error" ? "var(--fm-magenta)" : level === "warn" ? "var(--fm-warning)" : "var(--fm-success)";
+function LevelBadge({ level, color, label }: { level: ProxyLogLevel; color: string; label: string }) {
   return (
-    <span className="fm-caption" style={{ color, textTransform: "uppercase" }}>
-      {level}
+    <span
+      className="fm-caption"
+      style={{
+        color,
+        textTransform: "uppercase",
+        border: `1px solid ${color}`,
+        borderRadius: "999px",
+        padding: "4px 7px",
+        background: "rgba(0,0,0,0.20)",
+      }}
+    >
+      {label}/{level}
     </span>
   );
 }
 
 function formatTime(timestampMs: number) {
   return new Date(timestampMs).toLocaleTimeString();
+}
+
+function getLogTone(entry: ProxyLogEntry) {
+  const status = Number(entry.fields.status);
+  const isHttpError = Number.isFinite(status) && status >= 400;
+
+  if (entry.level === "error") {
+    return {
+      label: "异常",
+      accent: "var(--fm-magenta)",
+      border: "rgba(255,61,139,0.55)",
+      background: "linear-gradient(90deg, rgba(255,61,139,0.16), var(--fm-color-surface-soft) 36%)",
+    };
+  }
+
+  if (entry.level === "warn" || isHttpError) {
+    return {
+      label: "注意",
+      accent: "var(--fm-warning)",
+      border: "rgba(245,158,11,0.55)",
+      background: "linear-gradient(90deg, rgba(245,158,11,0.14), var(--fm-color-surface-soft) 36%)",
+    };
+  }
+
+  return {
+    label: "正常",
+    accent: "var(--fm-success)",
+    border: "rgba(74,222,128,0.45)",
+    background: "linear-gradient(90deg, rgba(74,222,128,0.10), var(--fm-color-surface-soft) 36%)",
+  };
 }
