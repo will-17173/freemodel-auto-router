@@ -17,7 +17,7 @@
 /* ── Design Tokens — Figma-inspired light mode ── */
 :root {
   --fm-font-sans: "MonuTitl", "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
-  --fm-font-mono: "ShareTechMono", "SF Mono", "Menlo", monospace;
+  --fm-font-mono: "MonuTitl", "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
 
   /* Page layers */
   --fm-canvas:       #ffffff;
