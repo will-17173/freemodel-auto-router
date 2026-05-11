@@ -3,79 +3,134 @@ import type { Provider } from "../types";
 interface Props {
   provider: Provider;
   isActive: boolean;
-  onToggleModel: (providerId: string, modelId: string) => void;
-  onToggleProvider: (providerId: string) => void;
-  onEdit: (providerId: string) => void;
-  dragHandleProps?: Record<string, unknown>;
+  onAddToQueue: (providerId: string, modelId: string) => void;
+  onConfigKey: (providerId: string) => void;
 }
 
-export function ProviderCard({
-  provider,
-  isActive,
-  onToggleModel,
-  onToggleProvider,
-  onEdit,
-  dragHandleProps,
-}: Props) {
-  const borderColor = isActive
-    ? "border-t-green-500"
-    : provider.enabled
-    ? "border-t-neutral-600"
-    : "border-t-neutral-800";
-
-  const statusLabel = isActive
-    ? <span className="text-[9px] bg-green-950 text-green-400 rounded px-1.5 py-0.5">● 活跃</span>
-    : provider.enabled
-    ? <span className="text-[9px] bg-neutral-900 text-neutral-500 rounded px-1.5 py-0.5">○ 待机</span>
-    : <span className="text-[9px] bg-neutral-900 text-neutral-600 rounded px-1.5 py-0.5">— 已禁用</span>;
+export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: Props) {
+  const hasKey = provider.api_key.trim().length > 0;
 
   return (
-    <div className={`bg-neutral-900 border border-neutral-800 border-t-2 ${borderColor} rounded-lg p-2.5 ${!provider.enabled ? "opacity-50" : ""}`}>
-      {/* 标题行 */}
-      <div className="flex items-center justify-between mb-1.5">
-        <span className="text-[12px] font-semibold text-neutral-200">{provider.name}</span>
-        <span {...dragHandleProps} className="text-neutral-600 cursor-grab text-sm select-none">⠿</span>
+    <div className={isActive ? "fm-card-active" : "fm-card"} style={{ position: "relative" }}>
+      {isActive && (
+        <div style={{
+          position: "absolute",
+          top: 0,
+          left: "24px",
+          right: "24px",
+          height: "2px",
+          borderRadius: "0 0 2px 2px",
+          background: "#ffffff",
+        }} />
+      )}
+
+      {/* Header */}
+      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "14px" }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "3px" }}>
+            {isActive && (
+              <div style={{
+                width: "7px", height: "7px", borderRadius: "50%",
+                background: "#4ade80", flexShrink: 0,
+              }} />
+            )}
+            <span style={{
+              fontSize: "20px", fontWeight: 700, color: "#ffffff",
+              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            }}>
+              {provider.name}
+            </span>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onConfigKey(provider.id)}
+          style={hasKey ? {
+            display: "inline-flex", alignItems: "center", gap: "5px",
+            fontFamily: "var(--fm-font-sans)",
+            fontSize: "14px", fontWeight: 500,
+            borderRadius: "999px",
+            padding: "7px 14px",
+            border: "1.5px solid #48484f",
+            background: "#1a1a1f",
+            color: "#ffffff",
+            cursor: "pointer",
+            flexShrink: 0, marginLeft: "8px",
+          } : {
+            display: "inline-flex", alignItems: "center", gap: "5px",
+            fontFamily: "var(--fm-font-sans)",
+            fontSize: "14px", fontWeight: 500,
+            borderRadius: "999px",
+            padding: "7px 14px",
+            border: "1.5px solid #d97706",
+            background: "#292110",
+            color: "#fbbf24",
+            cursor: "pointer",
+            flexShrink: 0, marginLeft: "8px",
+          }}
+          aria-label={hasKey ? "编辑 API Key" : "配置 API Key"}
+        >
+          {hasKey ? (
+            <>
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11 1a3 3 0 013 3 3 3 0 01-3 3 3 3 0 01-2.83-2H3l-1 1-1-1 1-1H2V3h1V2h1l1-1h3.17A3 3 0 0111 1z"/>
+                <circle cx="11" cy="4" r="1" fill="currentColor" stroke="none"/>
+              </svg>
+              Key ✓
+            </>
+          ) : (
+            <>
+              <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M8 2v12M2 8h12"/>
+              </svg>
+              配置 Key
+            </>
+          )}
+        </button>
       </div>
 
-      {/* 状态 */}
-      <div className="mb-2">{statusLabel}</div>
-
-      {/* 模型标签 */}
-      <div className="text-[9px] text-neutral-600 uppercase tracking-wide mb-1">模型</div>
-      <div className="flex flex-wrap gap-1 mb-2.5">
-        {provider.models.map((m) => (
-          <button
-            key={m.id}
-            onClick={() => onToggleModel(provider.id, m.id)}
-            className={`text-[9px] rounded px-1.5 py-0.5 border cursor-pointer transition-colors ${
-              m.enabled
-                ? "bg-blue-950 text-blue-400 border-blue-800"
-                : "bg-neutral-900 text-neutral-600 border-neutral-800"
-            }`}
-          >
-            {m.enabled ? `${m.name} ✓` : m.name}
-          </button>
-        ))}
-        {provider.models.length === 0 && (
-          <span className="text-[9px] text-neutral-700">未配置 API Key</span>
-        )}
-      </div>
-
-      {/* 底部：优先级 + 编辑 + 开关 */}
-      <div className="flex items-center justify-between">
-        <span className="text-[9px] text-neutral-700">#{provider.priority + 1}</span>
-        <div className="flex gap-1.5 items-center">
-          <button
-            onClick={() => onEdit(provider.id)}
-            className="bg-neutral-800 border border-neutral-700 rounded px-1.5 py-0.5 text-[9px] text-neutral-500 cursor-pointer"
-          >✎</button>
-          {/* 开关 */}
-          <button
-            onClick={() => onToggleProvider(provider.id)}
-            className={`w-[22px] h-[12px] rounded-full relative transition-colors ${provider.enabled ? "bg-green-500" : "bg-neutral-700"}`}
-          >
-            <span className={`absolute top-[1px] w-[10px] h-[10px] bg-white rounded-full transition-all ${provider.enabled ? "right-[1px]" : "left-[1px]"}`} />
-          </button>
+      {/* Models section */}
+      <div>
+        <div style={{
+          fontFamily: "var(--fm-font-mono)",
+          fontSize: "13px", fontWeight: 500,
+          letterSpacing: "0.8px", textTransform: "uppercase" as const,
+          color: "#ffffff",
+          marginBottom: "10px",
+        }}>
+          模型
+        </div>
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+          {provider.models.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => onAddToQueue(provider.id, m.id)}
+              disabled={!hasKey}
+              title={hasKey ? `添加 ${m.name} 到队列` : "请先配置 API Key"}
+              style={{
+                fontFamily: "var(--fm-font-sans)",
+                fontSize: "14px", fontWeight: 500,
+                borderRadius: "999px",
+                padding: "7px 14px 8px",
+                border: "1.5px solid #58585f",
+                background: "#222228",
+                color: "#ffffff",
+                cursor: hasKey ? "pointer" : "not-allowed",
+                display: "inline-flex", alignItems: "center", gap: "5px",
+                opacity: hasKey ? 1 : 0.55,
+              }}
+            >
+              <span>{m.name}</span>
+              {hasKey && (
+                <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" style={{ opacity: 0.5 }}>
+                  <path d="M8 2v12M2 8h12"/>
+                </svg>
+              )}
+            </button>
+          ))}
+          {provider.models.length === 0 && (
+            <span style={{ fontSize: "15px", color: "#ffffff", fontStyle: "italic" }}>暂无模型</span>
+          )}
         </div>
       </div>
     </div>

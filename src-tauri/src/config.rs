@@ -7,6 +7,7 @@ use anyhow::Result;
 #[serde(rename_all = "camelCase")]
 pub enum Protocol {
     OpenAI,
+    #[serde(alias = "Anthropic")]
     Anthropic,
 }
 
@@ -46,14 +47,22 @@ impl Default for RetryConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QueueItem {
+    pub provider_id: String,
+    pub model_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub providers: Vec<Provider>,
     pub retry: RetryConfig,
+    #[serde(default)]
+    pub queue: Vec<QueueItem>,
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self { providers: vec![], retry: RetryConfig::default() }
+        Self { providers: vec![], retry: RetryConfig::default(), queue: vec![] }
     }
 }
 
@@ -67,7 +76,13 @@ fn config_path() -> PathBuf {
 pub fn load_config() -> AppConfig {
     let path = config_path();
     if let Ok(s) = fs::read_to_string(&path) {
-        serde_json::from_str(&s).unwrap_or_default()
+        match serde_json::from_str::<AppConfig>(&s) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                eprintln!("[config] parse error: {e}");
+                AppConfig::default()
+            }
+        }
     } else {
         AppConfig::default()
     }

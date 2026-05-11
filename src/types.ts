@@ -22,7 +22,13 @@ export interface RetryConfig {
   retry_delay_secs: number;
 }
 
+export interface QueueItem {
+  provider_id: string;
+  model_id: string;
+}
+
 export interface AppConfig {
   providers: Provider[];
   retry: RetryConfig;
+  queue: QueueItem[];
 }

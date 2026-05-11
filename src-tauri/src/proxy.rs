@@ -31,7 +31,6 @@ pub async fn start_proxy(
     };
 
     let app = Router::new()
-        .route("/{*path}", any(proxy_handler))
         .fallback(any(proxy_handler))
         .with_state(state);
 
@@ -62,18 +61,27 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
     };
 
     loop {
-        let (base_url, api_key, protocol) = {
+        let (base_url, api_key, protocol, model_id, provider_name) = {
             let r = state.router.read().await;
-            match r.active_provider() {
-                Some(p) => (p.base_url.clone(), p.api_key.clone(), p.protocol.clone()),
+            match r.active_entry() {
+                Some((p, mid)) => (
+                    p.base_url.clone(),
+                    p.api_key.clone(),
+                    p.protocol.clone(),
+                    mid.to_owned(),
+                    p.name.clone(),
+                ),
                 None => {
                     return error_response(
                         StatusCode::SERVICE_UNAVAILABLE,
-                        "no available provider",
+                        "no available provider in queue",
                     )
                 }
             }
         };
+
+        // Rewrite the "model" field in the request body to match the queue item
+        let final_body = rewrite_model_field(&body_bytes, &model_id);
 
         let url = format!("{}{}", base_url.trim_end_matches('/'), path);
         let reqwest_method = reqwest::Method::from_bytes(method.as_str().as_bytes())
@@ -82,9 +90,8 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         let mut req_builder = state
             .http_client
             .request(reqwest_method, &url)
-            .body(body_bytes.clone());
+            .body(final_body);
 
-        // Set auth headers based on protocol
         match protocol {
             Protocol::Anthropic => {
                 req_builder = req_builder
@@ -97,11 +104,9 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             }
         }
 
-        // Forward content-type from original request
         if let Some(ct) = original_headers.get("content-type") {
             req_builder = req_builder.header("content-type", ct.clone());
         }
-        // Forward accept header
         if let Some(accept) = original_headers.get("accept") {
             req_builder = req_builder.header("accept", accept.clone());
         }
@@ -115,20 +120,20 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                         r.record_failure()
                     };
                     if switched {
-                        let provider_name = {
+                        let next_name = {
                             let r = state.router.read().await;
-                            r.active_provider()
-                                .map(|p| p.name.clone())
+                            r.active_entry()
+                                .map(|(p, mid)| format!("{} / {}", p.name, mid))
                                 .unwrap_or_default()
                         };
-                        let _ = state.notify_tx.send(provider_name);
+                        let _ = state.notify_tx.send(next_name);
                         continue;
                     }
                     tokio::time::sleep(std::time::Duration::from_secs(retry_delay as u64)).await;
                     continue;
                 }
 
-                // Stream the response back
+                let _ = provider_name; // suppress unused warning
                 let resp_status = StatusCode::from_u16(status).unwrap_or(StatusCode::OK);
                 let mut builder = Response::builder().status(resp_status);
 
@@ -152,13 +157,13 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                     r.record_failure()
                 };
                 if switched {
-                    let provider_name = {
+                    let next_name = {
                         let r = state.router.read().await;
-                        r.active_provider()
-                            .map(|p| p.name.clone())
+                        r.active_entry()
+                            .map(|(p, mid)| format!("{} / {}", p.name, mid))
                             .unwrap_or_default()
                     };
-                    let _ = state.notify_tx.send(provider_name);
+                    let _ = state.notify_tx.send(next_name);
                     continue;
                 }
                 tokio::time::sleep(std::time::Duration::from_secs(retry_delay as u64)).await;
@@ -166,6 +171,22 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             }
         }
     }
+}
+
+/// 将请求体 JSON 中的 "model" 字段替换为队列指定的 model_id
+fn rewrite_model_field(body: &[u8], model_id: &str) -> bytes::Bytes {
+    if let Ok(mut v) = serde_json::from_slice::<serde_json::Value>(body) {
+        if let Some(obj) = v.as_object_mut() {
+            obj.insert(
+                "model".to_owned(),
+                serde_json::Value::String(model_id.to_owned()),
+            );
+            if let Ok(rewritten) = serde_json::to_vec(&v) {
+                return bytes::Bytes::from(rewritten);
+            }
+        }
+    }
+    bytes::Bytes::copy_from_slice(body)
 }
 
 fn is_retryable_error(status: u16) -> bool {

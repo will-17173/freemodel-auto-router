@@ -27,10 +27,6 @@ pub fn run() {
                 }
             });
 
-            // Inject proxy into claude settings
-            if let Err(e) = claude_settings::inject_proxy(proxy::PROXY_PORT) {
-                log::warn!("inject proxy failed: {e}");
-            }
 
             // Listen for provider switch notifications and emit to frontend
             let app_handle = app.handle().clone();
@@ -70,6 +66,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_config,
             save_config_cmd,
+            inject_proxy_cmd,
+            remove_proxy_cmd,
+            restore_backup_cmd,
+            has_backup_cmd,
+            is_injected_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -86,4 +87,29 @@ fn get_config() -> config::AppConfig {
 #[tauri::command]
 fn save_config_cmd(cfg: config::AppConfig) -> Result<(), String> {
     config::save_config(&cfg).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn inject_proxy_cmd() -> Result<(), String> {
+    claude_settings::inject_proxy(proxy::PROXY_PORT).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn remove_proxy_cmd() -> Result<(), String> {
+    claude_settings::remove_proxy().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn restore_backup_cmd() -> Result<(), String> {
+    claude_settings::restore_backup().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn has_backup_cmd() -> bool {
+    claude_settings::has_backup()
+}
+
+#[tauri::command]
+fn is_injected_cmd() -> bool {
+    claude_settings::is_injected(proxy::PROXY_PORT)
 }

@@ -9,6 +9,10 @@ const host = process.env.TAURI_DEV_HOST;
 export default defineConfig(async () => ({
   plugins: [react(), tailwindcss()],
 
+  optimizeDeps: {
+    exclude: [],
+    entries: ["src/**/*.{ts,tsx}", "index.html"],
+  },
   clearScreen: false,
   server: {
     port: 1420,
@@ -23,7 +27,7 @@ export default defineConfig(async () => ({
       : undefined,
     watch: {
       // 3. tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      ignored: ["**/src-tauri/**", "**/cc-switch/**"],
     },
   },
 }));
