@@ -80,11 +80,11 @@ export default function App() {
       ...p,
       priority: i,
     }));
-    updateAndSave({ ...config, providers: reordered });
+    updateAndSave({ retry: config!.retry, providers: reordered });
   }
 
   function toggleModel(providerId: string, modelId: string) {
-    const providers = config.providers.map((p) =>
+    const providers = config!.providers.map((p) =>
       p.id !== providerId ? p : {
         ...p,
         models: p.models.map((m) =>
@@ -92,14 +92,14 @@ export default function App() {
         ),
       }
     );
-    updateAndSave({ ...config, providers });
+    updateAndSave({ retry: config!.retry, providers });
   }
 
   function toggleProvider(providerId: string) {
-    const providers = config.providers.map((p) =>
+    const providers = config!.providers.map((p) =>
       p.id !== providerId ? p : { ...p, enabled: !p.enabled }
     );
-    updateAndSave({ ...config, providers });
+    updateAndSave({ retry: config!.retry, providers });
   }
 
   return (
