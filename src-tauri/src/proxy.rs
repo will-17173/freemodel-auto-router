@@ -1,11 +1,12 @@
 use crate::config::AuthScheme;
+use crate::proxy_log::{LogLevel, ProxyLogEntry, ProxyLogStore};
 use crate::router::FailureAction;
 use crate::router::SharedRouter;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, Request, Response, StatusCode};
-use axum::routing::any;
-use axum::Router;
+use axum::routing::{any, get};
+use axum::{Json, Router};
 use http_body_util::BodyExt;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -17,11 +18,13 @@ pub struct ProxyState {
     pub router: SharedRouter,
     pub notify_tx: Arc<watch::Sender<String>>,
     pub http_client: reqwest::Client,
+    pub logs: ProxyLogStore,
 }
 
 pub async fn start_proxy(
     router: SharedRouter,
     notify_tx: Arc<watch::Sender<String>>,
+    logs: ProxyLogStore,
 ) -> anyhow::Result<()> {
     let client = reqwest::Client::builder().build()?;
 
@@ -29,9 +32,11 @@ pub async fn start_proxy(
         router,
         notify_tx,
         http_client: client,
+        logs,
     };
 
     let app = Router::new()
+        .route("/logs", get(logs_handler))
         .fallback(any(proxy_handler))
         .with_state(state);
 
@@ -39,6 +44,10 @@ pub async fn start_proxy(
     log::info!("proxy listening on 127.0.0.1:{}", PROXY_PORT);
     axum::serve(listener, app).await?;
     Ok(())
+}
+
+async fn logs_handler(State(state): State<ProxyState>) -> Json<Vec<ProxyLogEntry>> {
+    Json(state.logs.recent())
 }
 
 async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> Response<Body> {
@@ -62,7 +71,25 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         path,
         original_headers.contains_key("authorization"),
         original_headers.contains_key("x-api-key"),
-        original_headers.get("content-type").and_then(|v| v.to_str().ok()),
+        original_headers
+            .get("content-type")
+            .and_then(|v| v.to_str().ok()),
+    );
+    state.logs.push(
+        LogLevel::Info,
+        "inbound request",
+        [
+            ("method", method.as_str().to_owned()),
+            ("path", path.clone()),
+            (
+                "content_type",
+                original_headers
+                    .get("content-type")
+                    .and_then(|v| v.to_str().ok())
+                    .unwrap_or("")
+                    .to_owned(),
+            ),
+        ],
     );
 
     let retry_delay = {
@@ -117,10 +144,32 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             model_id,
             protocol,
         );
+        state.logs.push(
+            LogLevel::Info,
+            "forwarding upstream",
+            [
+                ("provider", provider_name.clone()),
+                ("model", model_id.clone()),
+                ("url", url.clone()),
+            ],
+        );
 
         match req_builder.send().await {
             Ok(resp) => {
                 let status = resp.status().as_u16();
+                state.logs.push(
+                    if is_retryable_error(status) {
+                        LogLevel::Warn
+                    } else {
+                        LogLevel::Info
+                    },
+                    "upstream response",
+                    [
+                        ("provider", provider_name.clone()),
+                        ("model", model_id.clone()),
+                        ("status", status.to_string()),
+                    ],
+                );
                 if is_retryable_error(status) {
                     let failure_action = {
                         let mut r = state.router.write().await;
@@ -134,14 +183,25 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                                     .map(|(p, mid)| format!("{} / {}", p.name, mid))
                                     .unwrap_or_default()
                             };
+                            state.logs.push(
+                                LogLevel::Warn,
+                                "switching provider",
+                                [("next", next_name.clone()), ("status", status.to_string())],
+                            );
                             let _ = state.notify_tx.send(next_name);
                             continue;
                         }
                         FailureAction::RetryCurrent => {
-                            tokio::time::sleep(std::time::Duration::from_secs(
-                                retry_delay as u64,
-                            ))
-                            .await;
+                            state.logs.push(
+                                LogLevel::Warn,
+                                "retrying current provider",
+                                [
+                                    ("provider", provider_name.clone()),
+                                    ("delay_secs", retry_delay.to_string()),
+                                ],
+                            );
+                            tokio::time::sleep(std::time::Duration::from_secs(retry_delay as u64))
+                                .await;
                             continue;
                         }
                         FailureAction::Exhausted => {}
@@ -170,6 +230,15 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             }
             Err(e) => {
                 log::warn!("proxy request error: {}", e);
+                state.logs.push(
+                    LogLevel::Error,
+                    "upstream request error",
+                    [
+                        ("provider", provider_name.clone()),
+                        ("model", model_id.clone()),
+                        ("error", e.to_string()),
+                    ],
+                );
                 let failure_action = {
                     let mut r = state.router.write().await;
                     r.record_failure()
@@ -182,10 +251,26 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                                 .map(|(p, mid)| format!("{} / {}", p.name, mid))
                                 .unwrap_or_default()
                         };
+                        state.logs.push(
+                            LogLevel::Warn,
+                            "switching provider",
+                            [
+                                ("next", next_name.clone()),
+                                ("reason", "request_error".to_owned()),
+                            ],
+                        );
                         let _ = state.notify_tx.send(next_name);
                         continue;
                     }
                     FailureAction::RetryCurrent => {
+                        state.logs.push(
+                            LogLevel::Warn,
+                            "retrying current provider",
+                            [
+                                ("provider", provider_name.clone()),
+                                ("delay_secs", retry_delay.to_string()),
+                            ],
+                        );
                         tokio::time::sleep(std::time::Duration::from_secs(retry_delay as u64))
                             .await;
                         continue;
@@ -307,14 +392,21 @@ fn error_response(status: StatusCode, msg: &str) -> Response<Body> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::proxy_log::{LogLevel, ProxyLogStore};
     use axum::http::{HeaderMap, HeaderValue};
 
     #[test]
     fn upstream_message_headers_preserve_anthropic_beta_and_add_version() {
         let mut original = HeaderMap::new();
-        original.insert("anthropic-beta", HeaderValue::from_static("claude-code-20250219"));
+        original.insert(
+            "anthropic-beta",
+            HeaderValue::from_static("claude-code-20250219"),
+        );
         original.insert("content-type", HeaderValue::from_static("application/json"));
-        original.insert("authorization", HeaderValue::from_static("Bearer inbound-token"));
+        original.insert(
+            "authorization",
+            HeaderValue::from_static("Bearer inbound-token"),
+        );
         original.insert("host", HeaderValue::from_static("localhost:7860"));
 
         let headers = build_upstream_headers(
@@ -359,7 +451,37 @@ mod tests {
         }
 
         for status in [400, 401, 404] {
-            assert!(!is_retryable_error(status), "{status} should not be retryable");
+            assert!(
+                !is_retryable_error(status),
+                "{status} should not be retryable"
+            );
         }
+    }
+
+    #[test]
+    fn proxy_log_store_keeps_recent_entries_without_sensitive_headers() {
+        let store = ProxyLogStore::new(2);
+
+        store.push(
+            LogLevel::Info,
+            "first request",
+            [
+                ("path", "/v1/messages"),
+                ("authorization", "Bearer secret-token"),
+            ],
+        );
+        store.push(LogLevel::Warn, "retrying upstream", [("status", "503")]);
+        store.push(
+            LogLevel::Error,
+            "upstream failed",
+            [("x-api-key", "secret-key")],
+        );
+
+        let entries = store.recent();
+
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].message, "retrying upstream");
+        assert_eq!(entries[1].level, LogLevel::Error);
+        assert_eq!(entries[1].fields.get("x-api-key").unwrap(), "[redacted]");
     }
 }

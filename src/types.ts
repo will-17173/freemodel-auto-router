@@ -34,3 +34,13 @@ export interface AppConfig {
   retry: RetryConfig;
   queue: QueueItem[];
 }
+
+export type ProxyLogLevel = "info" | "warn" | "error";
+
+export interface ProxyLogEntry {
+  id: number;
+  timestamp_ms: number;
+  level: ProxyLogLevel;
+  message: string;
+  fields: Record<string, string>;
+}

@@ -1,7 +1,8 @@
-mod config;
 mod claude_settings;
-mod router;
+mod config;
 mod proxy;
+mod proxy_log;
+mod router;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -10,23 +11,25 @@ use tauri::Manager;
 pub fn run() {
     let cfg = config::load_config();
     let shared_router = router::new_router(&cfg);
+    let proxy_logs = proxy_log::ProxyLogStore::new(200);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
         .manage(shared_router.clone())
+        .manage(proxy_logs.clone())
         .setup(move |app| {
             let router_clone = shared_router.clone();
+            let proxy_logs = proxy_logs.clone();
             let (notify_tx, mut notify_rx) = tokio::sync::watch::channel(String::new());
             let notify_tx = Arc::new(notify_tx);
 
             // Start proxy server in background
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = proxy::start_proxy(router_clone, notify_tx).await {
+                if let Err(e) = proxy::start_proxy(router_clone, notify_tx, proxy_logs).await {
                     log::error!("proxy error: {e}");
                 }
             });
-
 
             // Listen for provider switch notifications and emit to frontend
             let app_handle = app.handle().clone();
@@ -72,6 +75,7 @@ pub fn run() {
             restore_backup_cmd,
             has_backup_cmd,
             is_injected_cmd,
+            get_proxy_logs_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -97,8 +101,7 @@ async fn save_config_cmd(
 
 #[tauri::command]
 fn inject_proxy_cmd(auth_token: String, model: String) -> Result<(), String> {
-    claude_settings::inject_proxy(proxy::PROXY_PORT, &auth_token, &model)
-        .map_err(|e| e.to_string())
+    claude_settings::inject_proxy(proxy::PROXY_PORT, &auth_token, &model).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -124,4 +127,11 @@ fn has_backup_cmd() -> bool {
 #[tauri::command]
 fn is_injected_cmd() -> bool {
     claude_settings::is_injected(proxy::PROXY_PORT)
+}
+
+#[tauri::command]
+fn get_proxy_logs_cmd(
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Vec<proxy_log::ProxyLogEntry> {
+    logs.recent()
 }

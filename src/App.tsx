@@ -15,12 +15,14 @@ import { ProviderCard } from "./components/ProviderCard";
 import { QueuePanel } from "./components/QueuePanel";
 import { SettingsModal } from "./components/SettingsModal";
 import { ApiKeyModal } from "./components/ApiKeyModal";
+import { ProxyLogPanel } from "./components/ProxyLogPanel";
 import type { AppConfig, QueueItem } from "./types";
 import "./App.css";
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [showSettings, setShowSettings] = useState(false);
+  const [showLogs, setShowLogs] = useState(false);
   const [editingKeyProviderId, setEditingKeyProviderId] = useState<string | null>(null);
   const [proxyEnabled, setProxyEnabled] = useState(false);
   const [backupAvailable, setBackupAvailable] = useState(false);
@@ -263,6 +265,17 @@ export default function App() {
           )}
 
           <button
+            onClick={() => setShowLogs(true)}
+            className="fm-btn-secondary"
+            aria-label="打开代理日志"
+          >
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 3h10M3 8h10M3 13h6"/>
+            </svg>
+            日志
+          </button>
+
+          <button
             onClick={() => setShowSettings(true)}
             className="fm-btn-secondary"
             aria-label="打开设置"
@@ -412,6 +425,10 @@ export default function App() {
           onSave={(retry) => updateAndSave({ ...config, retry })}
           onClose={() => setShowSettings(false)}
         />
+      )}
+
+      {showLogs && (
+        <ProxyLogPanel onClose={() => setShowLogs(false)} />
       )}
 
       {editingKeyProvider && (
