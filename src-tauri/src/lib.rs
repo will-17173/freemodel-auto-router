@@ -86,8 +86,13 @@ fn get_config() -> config::AppConfig {
 }
 
 #[tauri::command]
-fn save_config_cmd(cfg: config::AppConfig) -> Result<(), String> {
-    config::save_config(&cfg).map_err(|e| e.to_string())
+async fn save_config_cmd(
+    cfg: config::AppConfig,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    config::save_config(&cfg).map_err(|e| e.to_string())?;
+    router.write().await.replace_config(&cfg);
+    Ok(())
 }
 
 #[tauri::command]

@@ -1,7 +1,7 @@
 # 排查记录：接入 Claude Code 后路由到 OpenRouter 全部返回 500
 
 > 日期：2026-05-11
-> 状态：**未解决，待续**
+> 状态：**已解决**
 > 现象：在前端打开"接入 CC"开关后，settings.json 写入正确（`ANTHROPIC_BASE_URL=http://localhost:7860`），代理服务确实在监听 7860，请求也成功转发到 OpenRouter，但每次都收到 `HTTP 500 Internal Server Error`（裸文本），Claude Code 因此拿不到回复。
 
 ## 已确认的事实
@@ -69,18 +69,27 @@ curl -X POST "https://openrouter.ai/api/v1/messages?beta=true" \
 - 在转发前 `eprintln!` 打印出站 URL/provider/model/protocol
 - **响应非 2xx 时改为 buffer 整个 body**（`resp.bytes().await`），打前 500 字节日志再透传 —— 破坏了错误路径的流式，但便于排查
 
+## 修复结论
+
+- 真正的代理侧根因有两层：转发时不能只保留 `content-type` / `accept`，必须保留 Claude Code 请求里的 `anthropic-*`、`x-stainless-*` 等端到端头；同时 OpenRouter 即使走 `/v1/messages` 也要求 `Authorization: Bearer <OpenRouter Key>`，不能按 Anthropic 原生 API 改成 `x-api-key`。
+- `/v1/messages` 请求现在会保留安全的入站端到端头，过滤 hop-by-hop / 入站鉴权头，再按 provider 的 `auth_scheme` 注入上游鉴权；OpenRouter 的 `protocol` 保持 `Anthropic`，`auth_scheme` 为 `Bearer`。
+- 上游 `500/502/504` 已纳入可重试/切换状态码，和 `429/503` 一起触发队列切换。
+- `save_config_cmd` 保存配置后会同步刷新运行中的 `RouterState`，代理不再继续使用启动时的配置快照。
+- 临时的非 2xx 响应体缓冲日志已移除，恢复为统一流式透传响应。
+
 ## 待办
 
-- [ ] **找出 OpenRouter `/v1/messages` 500 的真因**。建议方法：
+- [x] **找出 OpenRouter `/v1/messages` 500 的真因**。建议方法：
   - 用 mitmproxy / Charles 抓 Claude Code 直连 OpenRouter 的请求，对比代理转发出去的请求差在哪。
   - 怀疑点：`accept-encoding`（gzip 是否被 reqwest 自动处理坏）、`stream: true` 字段、Claude Code 特有 header（`anthropic-beta`、`x-stainless-*`）。
-- [ ] **修复 protocol 选择逻辑**。当前 `proxy.rs` 根据 config 里 provider 的 `protocol` 字段决定鉴权头格式，但 Claude Code 入站路径恒为 `/v1/messages`。两条思路：
+- [x] **修复 protocol 选择逻辑**。当前 `proxy.rs` 根据 config 里 provider 的 `protocol` 字段决定鉴权头格式，但 Claude Code 入站路径恒为 `/v1/messages`。两条思路：
   - A. config 里 OpenRouter 改成 `"anthropic"`，让代理加 `anthropic-version` + `x-api-key`（或 Bearer）。前端 UI 也对应调整。
   - B. 代理改为按入站路径决定出站头：`/v1/messages` → 永远 anthropic 头；`/v1/chat/completions` → openai 头。与 provider config 解耦。
-- [ ] **决定调试代码去留**。建议保留 `eprintln!` 日志（量不大），但把"非 2xx buffer 响应"那段恢复成原来的流式透传 —— 排查完就回滚到 `bytes_stream`。
-- [ ] **独立 bug 1：RouterState 不随 config 同步**。前端 `save_config_cmd` 写文件后不刷 RouterState，运行时仍用启动快照。修法：`save_config_cmd` 后调 `RouterState::from_config` 重建（注意要在写锁保护下做）。
-- [ ] **独立 bug 2：`is_retryable_error` 太窄**。当前只重试 429/503，但上游 500/502/504 也应触发"切下一队列项"，否则 Claude Code 直接看到 500 就放弃。
-- [ ] **独立 bug 3：`#[serde(rename_all = "camelCase")]` 对 `OpenAI` 变体的实际序列化结果**未验证。config 里写的是 `"openAI"`，但 serde camelCase 规则可能把 `OpenAI` 序列化成 `openAi`（连续大写当一个词的处理），需要 `#[serde(alias = "openAI")]` 兜底。
+  - 实际采用：OpenRouter 的“请求体协议”是 Anthropic Messages，但“鉴权协议”仍是 Bearer；当前用 `protocol: "Anthropic"` 表示请求协议，用 `auth_scheme: "Bearer"` 表示鉴权方式，代理负责透明保留 Anthropic 请求头。
+- [x] **决定调试代码去留**。建议保留 `eprintln!` 日志（量不大），但把"非 2xx buffer 响应"那段恢复成原来的流式透传 —— 排查完就回滚到 `bytes_stream`。
+- [x] **独立 bug 1：RouterState 不随 config 同步**。前端 `save_config_cmd` 写文件后不刷 RouterState，运行时仍用启动快照。修法：`save_config_cmd` 后调 `RouterState::from_config` 重建（注意要在写锁保护下做）。
+- [x] **独立 bug 2：`is_retryable_error` 太窄**。当前只重试 429/503，但上游 500/502/504 也应触发"切下一队列项"，否则 Claude Code 直接看到 500 就放弃。
+- [x] **独立 bug 3：`#[serde(rename_all = "camelCase")]` 对 `OpenAI` 变体的实际序列化结果**未验证。config 里写的是 `"openAI"`，但 serde camelCase 规则可能把 `OpenAI` 序列化成 `openAi`（连续大写当一个词的处理），需要 `#[serde(alias = "openAI")]` 兜底。
 
 ## 复现路径
 

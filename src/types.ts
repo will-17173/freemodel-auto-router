@@ -1,4 +1,5 @@
 export type Protocol = "OpenAI" | "Anthropic";
+export type AuthScheme = "Bearer" | "ApiKey";
 
 export interface Model {
   id: string;
@@ -11,6 +12,7 @@ export interface Provider {
   name: string;
   base_url: string;
   protocol: Protocol;
+  auth_scheme?: AuthScheme;
   api_key: string;
   models: Model[];
   enabled: boolean;

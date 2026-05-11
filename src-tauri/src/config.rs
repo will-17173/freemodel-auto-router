@@ -11,6 +11,14 @@ pub enum Protocol {
     Anthropic,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum AuthScheme {
+    #[serde(rename = "Bearer", alias = "bearer")]
+    Bearer,
+    #[serde(rename = "ApiKey", alias = "apiKey", alias = "api_key")]
+    ApiKey,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Model {
     pub id: String,
@@ -27,11 +35,25 @@ pub struct Provider {
     pub name: String,
     pub base_url: String,
     pub protocol: Protocol,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auth_scheme: Option<AuthScheme>,
     pub api_key: String,
     pub models: Vec<Model>,
     #[serde(default = "default_true")]
     pub enabled: bool,
     pub priority: u32,
+}
+
+impl Provider {
+    pub fn effective_auth_scheme(&self) -> AuthScheme {
+        self.auth_scheme.clone().unwrap_or_else(|| {
+            if self.id == "openrouter" || self.protocol == Protocol::OpenAI {
+                AuthScheme::Bearer
+            } else {
+                AuthScheme::ApiKey
+            }
+        })
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +90,7 @@ impl Default for AppConfig {
                 name: "OpenRouter".to_owned(),
                 base_url: "https://openrouter.ai/api".to_owned(),
                 protocol: Protocol::Anthropic,
+                auth_scheme: Some(AuthScheme::Bearer),
                 api_key: String::new(),
                 models: vec![Model {
                     id: "baidu/cobuddy:free".to_owned(),
@@ -112,4 +135,22 @@ pub fn save_config(config: &AppConfig) -> Result<()> {
     let s = serde_json::to_string_pretty(config)?;
     fs::write(&path, s)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn default_openrouter_uses_anthropic_protocol_with_bearer_auth() {
+        let cfg = AppConfig::default();
+        let openrouter = cfg
+            .providers
+            .iter()
+            .find(|provider| provider.id == "openrouter")
+            .unwrap();
+
+        assert_eq!(openrouter.protocol, Protocol::Anthropic);
+        assert_eq!(openrouter.effective_auth_scheme(), AuthScheme::Bearer);
+    }
 }
