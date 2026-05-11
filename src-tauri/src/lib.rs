@@ -1,6 +1,7 @@
 mod config;
 mod claude_settings;
 mod router;
+mod proxy;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
