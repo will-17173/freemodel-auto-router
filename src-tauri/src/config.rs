@@ -1,13 +1,13 @@
 use serde::{Deserialize, Serialize};
+use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
-use anyhow::Result;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "camelCase")]
 pub enum Protocol {
+    #[serde(rename = "OpenAI", alias = "openAI", alias = "openAi")]
     OpenAI,
-    #[serde(alias = "Anthropic")]
+    #[serde(rename = "Anthropic", alias = "anthropic")]
     Anthropic,
 }
 
@@ -62,14 +62,32 @@ pub struct AppConfig {
 
 impl Default for AppConfig {
     fn default() -> Self {
-        Self { providers: vec![], retry: RetryConfig::default(), queue: vec![] }
+        Self {
+            providers: vec![Provider {
+                id: "openrouter".to_owned(),
+                name: "OpenRouter".to_owned(),
+                base_url: "https://openrouter.ai/api".to_owned(),
+                protocol: Protocol::Anthropic,
+                api_key: String::new(),
+                models: vec![Model {
+                    id: "baidu/cobuddy:free".to_owned(),
+                    name: "Baidu Cobuddy (Free)".to_owned(),
+                    enabled: true,
+                }],
+                enabled: true,
+                priority: 100,
+            }],
+            retry: RetryConfig::default(),
+            queue: vec![],
+        }
     }
 }
 
 fn config_path() -> PathBuf {
-    dirs::config_dir()
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("freemodel")
         .join("config.json")
 }
 
