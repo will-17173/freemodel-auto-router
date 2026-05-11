@@ -67,6 +67,7 @@ pub fn run() {
             get_config,
             save_config_cmd,
             inject_proxy_cmd,
+            update_active_cmd,
             remove_proxy_cmd,
             restore_backup_cmd,
             has_backup_cmd,
@@ -90,8 +91,14 @@ fn save_config_cmd(cfg: config::AppConfig) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn inject_proxy_cmd() -> Result<(), String> {
-    claude_settings::inject_proxy(proxy::PROXY_PORT).map_err(|e| e.to_string())
+fn inject_proxy_cmd(auth_token: String, model: String) -> Result<(), String> {
+    claude_settings::inject_proxy(proxy::PROXY_PORT, &auth_token, &model)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn update_active_cmd(auth_token: String, model: String) -> Result<(), String> {
+    claude_settings::update_active(&auth_token, &model).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

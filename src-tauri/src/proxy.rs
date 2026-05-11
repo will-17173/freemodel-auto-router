@@ -55,6 +55,15 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         .unwrap_or_else(|| "/".to_owned());
     let original_headers = parts.headers.clone();
 
+    eprintln!(
+        "[proxy] inbound {} {} | has_auth={} has_xkey={} ct={:?}",
+        method,
+        path,
+        original_headers.contains_key("authorization"),
+        original_headers.contains_key("x-api-key"),
+        original_headers.get("content-type").and_then(|v| v.to_str().ok()),
+    );
+
     let retry_delay = {
         let r = state.router.read().await;
         r.retry.retry_delay_secs
@@ -111,6 +120,14 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             req_builder = req_builder.header("accept", accept.clone());
         }
 
+        eprintln!(
+            "[proxy] outbound -> {} | provider={} model={} protocol={:?}",
+            url,
+            provider_name,
+            model_id,
+            protocol,
+        );
+
         match req_builder.send().await {
             Ok(resp) => {
                 let status = resp.status().as_u16();
@@ -135,6 +152,44 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
 
                 let _ = provider_name; // suppress unused warning
                 let resp_status = StatusCode::from_u16(status).unwrap_or(StatusCode::OK);
+
+                // 上游非 2xx：缓冲响应体打日志再透传，便于定位
+                if !(200..300).contains(&status) {
+                    let resp_headers = resp.headers().clone();
+                    let bytes = match resp.bytes().await {
+                        Ok(b) => b,
+                        Err(e) => {
+                            log::warn!("[proxy] failed to read upstream error body: {}", e);
+                            return error_response(
+                                StatusCode::BAD_GATEWAY,
+                                "failed to read upstream error",
+                            );
+                        }
+                    };
+                    let preview = String::from_utf8_lossy(&bytes[..bytes.len().min(500)]);
+                    eprintln!(
+                        "[proxy] upstream {} from {} body[0..{}]: {}",
+                        status,
+                        url,
+                        bytes.len().min(500),
+                        preview
+                    );
+                    let mut builder = Response::builder().status(resp_status);
+                    for (key, value) in resp_headers.iter() {
+                        let k = key.as_str().to_ascii_lowercase();
+                        if k == "content-length" || k == "content-encoding" || k == "transfer-encoding" {
+                            continue;
+                        }
+                        builder = builder.header(key.as_str(), value.clone());
+                    }
+                    return builder.body(Body::from(bytes)).unwrap_or_else(|_| {
+                        error_response(
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            "failed to build response",
+                        )
+                    });
+                }
+
                 let mut builder = Response::builder().status(resp_status);
 
                 for (key, value) in resp.headers().iter() {

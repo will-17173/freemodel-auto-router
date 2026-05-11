@@ -5,6 +5,7 @@ import {
   getConfig,
   saveConfig,
   injectProxy,
+  updateActive,
   removeProxy,
   restoreBackup,
   hasBackup,
@@ -39,6 +40,24 @@ export default function App() {
     });
     return () => { unlisten.then(f => f()); };
   }, []);
+
+  // 当代理已注入且队列首项（provider key 或 model）发生变化时，
+  // 同步刷新 settings.json 里的 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL。
+  useEffect(() => {
+    if (!proxyEnabled || !config) return;
+    const head = config.queue[0];
+    if (!head) return;
+    const provider = config.providers.find((p) => p.id === head.provider_id);
+    if (!provider || provider.api_key.trim().length === 0) return;
+    updateActive(provider.api_key, head.model_id).catch(console.error);
+  }, [
+    proxyEnabled,
+    config?.queue[0]?.provider_id,
+    config?.queue[0]?.model_id,
+    config?.queue[0]
+      ? config.providers.find((p) => p.id === config.queue[0].provider_id)?.api_key
+      : undefined,
+  ]);
 
   if (!config) return (
     <div style={{ background: "var(--fm-color-canvas)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -175,8 +194,11 @@ export default function App() {
               if (!isActive) return;
               const next = !proxyEnabled;
               try {
-                if (next) await injectProxy();
-                else await removeProxy();
+                if (next) {
+                  await injectProxy(activeProvider!.api_key, activeModel!.id);
+                } else {
+                  await removeProxy();
+                }
                 setProxyEnabled(next);
                 setBackupAvailable(await hasBackup());
               } catch (e) {

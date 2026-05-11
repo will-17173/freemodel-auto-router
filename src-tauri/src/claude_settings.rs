@@ -35,10 +35,12 @@ fn local_base_url(port: u16) -> String {
     format!("http://localhost:{}", port)
 }
 
+const MANAGED_ENV_KEYS: [&str; 3] = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL"];
+
 /// 注入代理：把 env.ANTHROPIC_BASE_URL 指到本地代理，
-/// 并把会污染鉴权的 ANTHROPIC_AUTH_TOKEN 临时移除。
+/// 同时写入 ANTHROPIC_AUTH_TOKEN 和 ANTHROPIC_MODEL 给 Claude Code 用。
 /// 原值全部备份到顶层 `_fm_backup`，只在第一次注入时记录。
-pub fn inject_proxy(port: u16) -> Result<()> {
+pub fn inject_proxy(port: u16, auth_token: &str, model: &str) -> Result<()> {
     let mut val = read_settings()?;
 
     let already_injected = val
@@ -52,11 +54,10 @@ pub fn inject_proxy(port: u16) -> Result<()> {
 
         let mut env_backup = serde_json::Map::new();
         if let Some(env) = val.get("env").and_then(|e| e.as_object()) {
-            if let Some(v) = env.get("ANTHROPIC_BASE_URL") {
-                env_backup.insert("ANTHROPIC_BASE_URL".to_string(), v.clone());
-            }
-            if let Some(v) = env.get("ANTHROPIC_AUTH_TOKEN") {
-                env_backup.insert("ANTHROPIC_AUTH_TOKEN".to_string(), v.clone());
+            for k in MANAGED_ENV_KEYS {
+                if let Some(v) = env.get(k) {
+                    env_backup.insert(k.to_string(), v.clone());
+                }
             }
         }
         backup.insert("env".to_string(), Value::Object(env_backup));
@@ -80,11 +81,45 @@ pub fn inject_proxy(port: u16) -> Result<()> {
                 "ANTHROPIC_BASE_URL".to_string(),
                 Value::String(local_base_url(port)),
             );
-            env_obj.remove("ANTHROPIC_AUTH_TOKEN");
+            env_obj.insert(
+                "ANTHROPIC_AUTH_TOKEN".to_string(),
+                Value::String(auth_token.to_string()),
+            );
+            env_obj.insert(
+                "ANTHROPIC_MODEL".to_string(),
+                Value::String(model.to_string()),
+            );
         }
         obj.remove("apiBaseUrl");
     }
 
+    write_settings(&val)?;
+    Ok(())
+}
+
+/// 队列首项变更后，仅刷新 ANTHROPIC_AUTH_TOKEN 和 ANTHROPIC_MODEL，
+/// 不动 base url，也不重新写备份。仅在已注入状态下应该被调用。
+pub fn update_active(auth_token: &str, model: &str) -> Result<()> {
+    let mut val = read_settings()?;
+    let injected = val
+        .get("env")
+        .and_then(|e| e.get("ANTHROPIC_BASE_URL"))
+        .and_then(|v| v.as_str())
+        .map(|s| s.starts_with("http://localhost:") || s.starts_with("http://127.0.0.1:"))
+        .unwrap_or(false);
+    if !injected {
+        return Ok(());
+    }
+    if let Some(env) = val.get_mut("env").and_then(|e| e.as_object_mut()) {
+        env.insert(
+            "ANTHROPIC_AUTH_TOKEN".to_string(),
+            Value::String(auth_token.to_string()),
+        );
+        env.insert(
+            "ANTHROPIC_MODEL".to_string(),
+            Value::String(model.to_string()),
+        );
+    }
     write_settings(&val)?;
     Ok(())
 }
@@ -121,8 +156,9 @@ fn apply_restore(val: &mut Value) {
     {
         let obj = val.as_object_mut().unwrap();
         if let Some(env) = obj.get_mut("env").and_then(|e| e.as_object_mut()) {
-            env.remove("ANTHROPIC_BASE_URL");
-            env.remove("ANTHROPIC_AUTH_TOKEN");
+            for k in MANAGED_ENV_KEYS {
+                env.remove(k);
+            }
         }
         obj.remove("apiBaseUrl");
     }
