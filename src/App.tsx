@@ -309,7 +309,7 @@ await injectProxy(config.port, activeProvider!.api_key);
                 await removeCodex();
                 setAppStates(prev => ({ ...prev, codex: false }));
               } else {
-                await injectCodex(activeProvider!);
+                await injectCodex(activeProvider!, config.port);
                 setAppStates(prev => ({ ...prev, codex: true }));
               }
             }}
@@ -327,7 +327,7 @@ await injectProxy(config.port, activeProvider!.api_key);
                   await removeHermes(activeProvider!.id);
                   setAppStates(prev => ({ ...prev, hermes: false }));
                 } else {
-                  await injectHermes(activeProvider!);
+                  await injectHermes(activeProvider!, config.port);
                   setAppStates(prev => ({ ...prev, hermes: true }));
                 }
               } catch (e) {
@@ -347,7 +347,7 @@ await injectProxy(config.port, activeProvider!.api_key);
                 await removeOpenclaw(activeProvider!.id);
                 setAppStates(prev => ({ ...prev, openclaw: false }));
               } else {
-                await injectOpenclaw(activeProvider!);
+                await injectOpenclaw(activeProvider!, config.port);
                 setAppStates(prev => ({ ...prev, openclaw: true }));
               }
             }}
