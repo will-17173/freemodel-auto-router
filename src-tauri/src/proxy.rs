@@ -593,4 +593,85 @@ mod tests {
         assert_eq!(entries[1].level, LogLevel::Error);
         assert_eq!(entries[1].fields.get("x-api-key").unwrap(), "[redacted]");
     }
+
+    mod route_prefix {
+        use super::super::{
+            build_upstream_headers_for_route, parse_route_prefix, RoutePrefix,
+        };
+        use axum::http::{HeaderMap, HeaderValue};
+        use crate::config::AuthScheme;
+
+        #[test]
+        fn parse_anthropic_prefix() {
+            let result = parse_route_prefix("/anthropic/v1/messages");
+            assert_eq!(result, Some((RoutePrefix::Anthropic, "/v1/messages")));
+        }
+
+        #[test]
+        fn parse_openai_prefix() {
+            let result = parse_route_prefix("/openai/v1/chat/completions");
+            assert_eq!(result, Some((RoutePrefix::OpenAI, "/v1/chat/completions")));
+        }
+
+        #[test]
+        fn reject_invalid_prefix() {
+            let result = parse_route_prefix("/v1/messages");
+            assert_eq!(result, None);
+        }
+
+        #[test]
+        fn openai_route_uses_bearer_auth_regardless_of_auth_scheme() {
+            let mut original = HeaderMap::new();
+            original.insert("content-type", HeaderValue::from_static("application/json"));
+
+            // 即使 auth_scheme 是 ApiKey，OpenAI 路径也应该使用 Bearer
+            let headers = build_upstream_headers_for_route(
+                &original,
+                RoutePrefix::OpenAI,
+                &AuthScheme::ApiKey,
+                "test-key",
+                "/v1/chat/completions",
+            );
+
+            assert_eq!(headers.get("authorization").unwrap(), "Bearer test-key");
+            assert!(!headers.contains_key("x-api-key"));
+            assert!(!headers.contains_key("anthropic-version"));
+        }
+
+        #[test]
+        fn anthropic_route_with_apikey_scheme_uses_x_api_key() {
+            let mut original = HeaderMap::new();
+            original.insert("content-type", HeaderValue::from_static("application/json"));
+
+            let headers = build_upstream_headers_for_route(
+                &original,
+                RoutePrefix::Anthropic,
+                &AuthScheme::ApiKey,
+                "test-key",
+                "/v1/messages",
+            );
+
+            assert_eq!(headers.get("x-api-key").unwrap(), "test-key");
+            assert!(!headers.contains_key("authorization"));
+            assert_eq!(headers.get("anthropic-version").unwrap(), "2023-06-01");
+        }
+
+        #[test]
+        fn anthropic_route_with_bearer_scheme_uses_authorization() {
+            let mut original = HeaderMap::new();
+            original.insert("content-type", HeaderValue::from_static("application/json"));
+
+            let headers = build_upstream_headers_for_route(
+                &original,
+                RoutePrefix::Anthropic,
+                &AuthScheme::Bearer,
+                "test-key",
+                "/v1/messages",
+            );
+
+            assert_eq!(headers.get("authorization").unwrap(), "Bearer test-key");
+            assert!(!headers.contains_key("x-api-key"));
+            assert_eq!(headers.get("anthropic-version").unwrap(), "2023-06-01");
+        }
+    }
 }
