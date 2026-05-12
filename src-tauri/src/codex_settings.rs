@@ -37,25 +37,31 @@ pub fn inject(provider: &Provider, port: u16) -> Result<()> {
 pub fn remove() -> Result<()> {
     let dir = codex_dir();
 
+    // Delete auth.json entirely (don't leave {} which means "no auth")
     let auth_path = dir.join("auth.json");
     if auth_path.exists() {
-        let auth_tmp = auth_path.with_extension("tmp");
-        fs::write(&auth_tmp, "{}")?;
-        fs::rename(&auth_tmp, &auth_path)?;
+        fs::remove_file(&auth_path)?;
     }
 
+    // Restore config.toml to a clean state (remove our injected model + [provider] section)
     let config_path = dir.join("config.toml");
     if config_path.exists() {
         let content = fs::read_to_string(&config_path).unwrap_or_default();
-        // Remove the [provider] section and everything after it
         let cleaned = content
             .lines()
             .take_while(|line| !line.trim_start().starts_with("[provider]"))
             .collect::<Vec<_>>()
-            .join("\n");
+            .join("\n")
+            .trim_end()
+            .to_string();
         let config_tmp = config_path.with_extension("tmp");
-        fs::write(&config_tmp, cleaned.trim_end())?;
-        fs::rename(&config_tmp, &config_path)?;
+        if cleaned.is_empty() || cleaned == "model = \"freemodel-auto\"" {
+            // Nothing meaningful left — remove the file entirely
+            fs::remove_file(&config_path)?;
+        } else {
+            fs::write(&config_tmp, cleaned)?;
+            fs::rename(&config_tmp, &config_path)?;
+        }
     }
 
     Ok(())
