@@ -1,4 +1,5 @@
 use crate::config::{AppConfig, Provider, QueueItem, RetryConfig};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -10,6 +11,7 @@ pub struct RouterState {
     pub retry: RetryConfig,
     pub fail_counts: Vec<u32>,
     pub exhausted_indices: Vec<usize>,
+    pub auth_map: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -29,11 +31,41 @@ impl RouterState {
             retry: cfg.retry.clone(),
             fail_counts: vec![0; n],
             exhausted_indices: vec![],
+            auth_map: HashMap::new(),
+        }
+    }
+
+    pub fn from_config_with_auth(cfg: &AppConfig, auth: HashMap<String, String>) -> Self {
+        let n = cfg.queue.len();
+        Self {
+            active_idx: 0,
+            queue: cfg.queue.clone(),
+            providers: cfg.providers.clone(),
+            retry: cfg.retry.clone(),
+            fail_counts: vec![0; n],
+            exhausted_indices: vec![],
+            auth_map: auth,
         }
     }
 
     pub fn replace_config(&mut self, cfg: &AppConfig) {
-        *self = Self::from_config(cfg);
+        let n = cfg.queue.len();
+        self.active_idx = 0;
+        self.queue = cfg.queue.clone();
+        self.providers = cfg.providers.clone();
+        self.retry = cfg.retry.clone();
+        self.fail_counts = vec![0; n];
+        self.exhausted_indices = vec![];
+        // auth_map 保持不变
+    }
+
+    pub fn update_auth(&mut self, auth: HashMap<String, String>) {
+        self.auth_map = auth;
+    }
+
+    /// 获取指定 provider 的 api_key
+    pub fn get_api_key(&self, provider_id: &str) -> Option<&str> {
+        self.auth_map.get(provider_id).map(|s| s.as_str())
     }
 
     /// 检查某个索引是否已用尽
@@ -113,6 +145,10 @@ pub fn new_router(cfg: &AppConfig) -> SharedRouter {
     Arc::new(RwLock::new(RouterState::from_config(cfg)))
 }
 
+pub fn new_router_with_auth(cfg: &AppConfig, auth: HashMap<String, String>) -> SharedRouter {
+    Arc::new(RwLock::new(RouterState::from_config_with_auth(cfg, auth)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -127,7 +163,6 @@ mod tests {
             dual_protocol: false,
             protocol: Protocol::Anthropic,
             auth_scheme: None,
-            api_key: "token".to_owned(),
             models: vec![Model {
                 id: model_id.to_owned(),
                 name: model_id.to_owned(),

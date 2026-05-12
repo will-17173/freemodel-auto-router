@@ -1,3 +1,4 @@
+mod auth;
 mod claude_settings;
 mod codex_settings;
 mod hermes_settings;
@@ -25,7 +26,8 @@ struct ProxyHandle(Arc<Mutex<ProxyHandleInner>>);
 pub fn run() {
     let cfg = config::load_config();
     let port = cfg.port;
-    let shared_router = router::new_router(&cfg);
+    let auth_map = auth::load_auth();
+    let shared_router = router::new_router_with_auth(&cfg, auth_map);
     let proxy_logs = proxy_log::ProxyLogStore::new(200);
 
     tauri::Builder::default()
@@ -113,6 +115,10 @@ pub fn run() {
             get_exhausted_indices_cmd,
             get_active_idx_cmd,
             reset_exhausted_cmd,
+            get_auth_cmd,
+            save_auth_cmd,
+            has_auth_cmd,
+            get_all_auth_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -269,16 +275,17 @@ async fn restart_proxy_cmd(
 
 #[tauri::command]
 fn inject_codex_cmd(
-    provider: config::Provider,
+    provider_id: String,
+    api_key: String,
     port: u16,
     logs: tauri::State<'_, proxy_log::ProxyLogStore>,
 ) -> Result<(), String> {
-    match codex_settings::inject(&provider, port) {
+    match codex_settings::inject(&provider_id, &api_key, port) {
         Ok(()) => {
             logs.push(
                 proxy_log::LogLevel::Info,
                 "Codex 注入已开启",
-                [("app", "Codex"), ("action", "inject"), ("provider", &provider.name.clone()), ("port", &port.to_string())],
+                [("app", "Codex"), ("action", "inject"), ("provider_id", &provider_id), ("port", &port.to_string())],
             );
             Ok(())
         }
@@ -286,7 +293,7 @@ fn inject_codex_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Codex 注入失败: {e}"),
-                [("app", "Codex"), ("action", "inject"), ("provider", &provider.name.clone()), ("error", &e.to_string())],
+                [("app", "Codex"), ("action", "inject"), ("provider_id", &provider_id), ("error", &e.to_string())],
             );
             Err(e.to_string())
         }
@@ -319,16 +326,17 @@ fn remove_codex_cmd(
 
 #[tauri::command]
 fn inject_hermes_cmd(
-    provider: config::Provider,
+    provider_id: String,
+    api_key: String,
     port: u16,
     logs: tauri::State<'_, proxy_log::ProxyLogStore>,
 ) -> Result<(), String> {
-    match hermes_settings::inject(&provider, port) {
+    match hermes_settings::inject(&provider_id, &api_key, port) {
         Ok(()) => {
             logs.push(
                 proxy_log::LogLevel::Info,
                 "Hermes 注入已开启",
-                [("app", "Hermes"), ("action", "inject"), ("provider", &provider.name.clone()), ("port", &port.to_string())],
+                [("app", "Hermes"), ("action", "inject"), ("provider_id", &provider_id), ("port", &port.to_string())],
             );
             Ok(())
         }
@@ -336,7 +344,7 @@ fn inject_hermes_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Hermes 注入失败: {e}"),
-                [("app", "Hermes"), ("action", "inject"), ("provider", &provider.name.clone()), ("error", &e.to_string())],
+                [("app", "Hermes"), ("action", "inject"), ("provider_id", &provider_id), ("error", &e.to_string())],
             );
             Err(e.to_string())
         }
@@ -375,16 +383,18 @@ fn is_hermes_injected_cmd(provider_id: String) -> bool {
 
 #[tauri::command]
 fn inject_openclaw_cmd(
-    provider: config::Provider,
+    provider_id: String,
+    api_key: String,
+    models: Vec<config::Model>,
     port: u16,
     logs: tauri::State<'_, proxy_log::ProxyLogStore>,
 ) -> Result<(), String> {
-    match openclaw_settings::inject(&provider, port) {
+    match openclaw_settings::inject(&provider_id, &api_key, &models, port) {
         Ok(()) => {
             logs.push(
                 proxy_log::LogLevel::Info,
                 "OpenClaw 注入已开启",
-                [("app", "OpenClaw"), ("action", "inject"), ("provider", &provider.name.clone()), ("port", &port.to_string())],
+                [("app", "OpenClaw"), ("action", "inject"), ("provider_id", &provider_id), ("port", &port.to_string())],
             );
             Ok(())
         }
@@ -392,7 +402,7 @@ fn inject_openclaw_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("OpenClaw 注入失败: {e}"),
-                [("app", "OpenClaw"), ("action", "inject"), ("provider", &provider.name.clone()), ("error", &e.to_string())],
+                [("app", "OpenClaw"), ("action", "inject"), ("provider_id", &provider_id), ("error", &e.to_string())],
             );
             Err(e.to_string())
         }
@@ -444,4 +454,28 @@ async fn reset_exhausted_cmd(
 ) -> Result<(), String> {
     router.write().await.reset_exhausted();
     Ok(())
+}
+
+#[tauri::command]
+fn get_auth_cmd(provider_id: String) -> Option<String> {
+    auth::get_api_key(&provider_id)
+}
+
+#[tauri::command]
+async fn save_auth_cmd(provider_id: String, api_key: String, router: tauri::State<'_, router::SharedRouter>) -> Result<(), String> {
+    auth::save_api_key(&provider_id, &api_key).map_err(|e| e.to_string())?;
+    // 更新 router 的 auth_map
+    let auth_map = auth::load_auth();
+    router.write().await.update_auth(auth_map);
+    Ok(())
+}
+
+#[tauri::command]
+fn has_auth_cmd(provider_id: String) -> bool {
+    auth::get_api_key(&provider_id).map(|k| k.trim().len() > 0).unwrap_or(false)
+}
+
+#[tauri::command]
+fn get_all_auth_cmd() -> std::collections::HashMap<String, bool> {
+    auth::has_auth_map()
 }

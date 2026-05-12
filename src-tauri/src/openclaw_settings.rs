@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
 use serde_json::{json, Value};
-use crate::config::Provider;
+use crate::config::Model;
 
 fn openclaw_config_path() -> PathBuf {
     dirs::home_dir()
@@ -11,7 +11,7 @@ fn openclaw_config_path() -> PathBuf {
         .join("openclaw.json")
 }
 
-pub fn inject(provider: &Provider, port: u16) -> Result<()> {
+pub fn inject(provider_id: &str, api_key: &str, models: &[Model], port: u16) -> Result<()> {
     let path = openclaw_config_path();
     fs::create_dir_all(path.parent().unwrap())?;
 
@@ -22,16 +22,15 @@ pub fn inject(provider: &Provider, port: u16) -> Result<()> {
         json!({})
     };
 
-    let models: Vec<Value> = provider
-        .models
+    let models_json: Vec<Value> = models
         .iter()
         .map(|m| json!({ "id": m.id }))
         .collect();
 
     let provider_entry = json!({
         "baseUrl": format!("http://localhost:{}/openai", port),
-        "apiKey": provider.api_key,
-        "models": models,
+        "apiKey": api_key,
+        "models": models_json,
     });
 
     // Ensure nested path exists: doc.models.providers
@@ -47,7 +46,7 @@ pub fn inject(provider: &Provider, port: u16) -> Result<()> {
     models_obj
         .as_object_mut()
         .unwrap()
-        .insert(provider.id.clone(), provider_entry);
+        .insert(provider_id.to_string(), provider_entry);
 
     let tmp = path.with_extension("tmp");
     fs::write(&tmp, serde_json::to_string_pretty(&doc)?)?;

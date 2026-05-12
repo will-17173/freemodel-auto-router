@@ -1,15 +1,22 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getAuth } from "../api";
 
 interface Props {
+  providerId: string;
   providerName: string;
-  currentKey: string;
   onSave: (key: string) => void;
   onClose: () => void;
 }
 
-export function ApiKeyModal({ providerName, currentKey, onSave, onClose }: Props) {
-  const [key, setKey] = useState(currentKey);
+export function ApiKeyModal({ providerId, providerName, onSave, onClose }: Props) {
+  const [key, setKey] = useState("");
   const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    getAuth(providerId).then((k) => {
+      setKey(k || "");
+    });
+  }, [providerId]);
 
   function handleSave() {
     onSave(key.trim());

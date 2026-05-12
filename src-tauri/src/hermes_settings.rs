@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
-use crate::config::Provider;
 
 const BACKUP_KEY: &str = "_fm_backup";
 
@@ -29,7 +28,7 @@ fn is_model_injected(doc: &serde_yaml::Value, port: u16) -> bool {
 /// 需要备份的 model 子字段
 const MODEL_KEYS_TO_BACKUP: &[&str] = &["default", "provider", "base_url", "api_mode"];
 
-pub fn inject(provider: &Provider, port: u16) -> Result<()> {
+pub fn inject(provider_id: &str, api_key: &str, port: u16) -> Result<()> {
     let path = hermes_config_path();
     fs::create_dir_all(path.parent().unwrap())?;
 
@@ -100,7 +99,7 @@ pub fn inject(provider: &Provider, port: u16) -> Result<()> {
             );
             model_map.insert(
                 serde_yaml::Value::String("provider".into()),
-                serde_yaml::Value::String(provider.id.clone()),
+                serde_yaml::Value::String(provider_id.to_string()),
             );
             model_map.insert(
                 serde_yaml::Value::String("base_url".into()),
@@ -117,7 +116,7 @@ pub fn inject(provider: &Provider, port: u16) -> Result<()> {
     let mut provider_entry = serde_yaml::Mapping::new();
     provider_entry.insert(
         serde_yaml::Value::String("name".into()),
-        serde_yaml::Value::String(provider.id.clone()),
+        serde_yaml::Value::String(provider_id.to_string()),
     );
     provider_entry.insert(
         serde_yaml::Value::String("base_url".into()),
@@ -125,7 +124,7 @@ pub fn inject(provider: &Provider, port: u16) -> Result<()> {
     );
     provider_entry.insert(
         serde_yaml::Value::String("api_key".into()),
-        serde_yaml::Value::String(provider.api_key.clone()),
+        serde_yaml::Value::String(api_key.to_string()),
     );
     provider_entry.insert(
         serde_yaml::Value::String("model".into()),
@@ -152,7 +151,7 @@ pub fn inject(provider: &Provider, port: u16) -> Result<()> {
     let cp_key = serde_yaml::Value::String("custom_providers".into());
     if let Some(seq) = root.get_mut(&cp_key).and_then(|v| v.as_sequence_mut()) {
         let name_key = serde_yaml::Value::String("name".into());
-        let name_val = serde_yaml::Value::String(provider.id.clone());
+        let name_val = serde_yaml::Value::String(provider_id.to_string());
         if let Some(pos) = seq.iter().position(|e| {
             e.as_mapping()
                 .and_then(|m| m.get(&name_key))

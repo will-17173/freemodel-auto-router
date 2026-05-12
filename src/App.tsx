@@ -15,6 +15,7 @@ import {
   getExhaustedIndices,
   getActiveIdx,
   resetExhausted,
+  getAuth, saveAuth, getAllAuth,
 } from "./api";
 import { ProviderCard } from "./components/ProviderCard";
 import { QueuePanel } from "./components/QueuePanel";
@@ -54,6 +55,7 @@ function createProviderId(name: string, providers: Provider[]) {
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [authMap, setAuthMap] = useState<Record<string, boolean>>({});  // provider_id -> hasKey
   const [showSettings, setShowSettings] = useState(false);
   const [showLogs, setShowLogs] = useState(false);
   const [showAddProvider, setShowAddProvider] = useState(false);
@@ -70,6 +72,7 @@ export default function App() {
 
   useEffect(() => {
     getConfig().then(setConfig);
+    getAllAuth().then(setAuthMap);
   }, []);
 
   useEffect(() => {
@@ -107,21 +110,26 @@ export default function App() {
   }, [config?.queue]);
 
   // 当代理已注入且队列首项（provider key 或 model）发生变化时，
-  // 同步刷新 settings.json 里的 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL。
-  useEffect(() => {
+// 同步刷新 settings.json 里的 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL。
+useEffect(() => {
     if (!appStates.cc || !config) return;
     const head = config.queue[0];
     if (!head) return;
     const provider = config.providers.find((p) => p.id === head.provider_id);
-    if (!provider || provider.api_key.trim().length === 0) return;
-updateActive(provider.api_key).catch(console.error);
+    if (!provider) return;
+    // 从 authMap 检查是否有 key
+    if (!authMap[provider.id]) return;
+    // 获取实际的 api_key
+    getAuth(provider.id).then((key) => {
+      if (key && key.trim().length > 0) {
+        updateActive(key).catch(console.error);
+      }
+    }).catch(console.error);
   }, [
     appStates.cc,
     config?.queue[0]?.provider_id,
     config?.queue[0]?.model_id,
-    config?.queue[0]
-      ? config.providers.find((p) => p.id === config.queue[0].provider_id)?.api_key
-      : undefined,
+    authMap,
   ]);
 
   // 初始化时检查 Hermes 配置状态（必须在所有早期 return 之前）
@@ -152,8 +160,7 @@ updateActive(provider.api_key).catch(console.error);
   }
 
   function addToQueue(providerId: string, modelId: string) {
-    const provider = config!.providers.find((p) => p.id === providerId);
-    if (!provider || provider.api_key.trim().length === 0) return;
+    if (!authMap[providerId]) return;  // 需要 API key 才能添加
     const newItem: QueueItem = { provider_id: providerId, model_id: modelId };
     updateAndSave({ ...config!, queue: [...config!.queue, newItem] });
   }
@@ -174,11 +181,9 @@ updateActive(provider.api_key).catch(console.error);
     updateAndSave({ ...config!, queue: newQueue });
   }
 
-  function saveApiKey(providerId: string, key: string) {
-    const providers = config!.providers.map((p) =>
-      p.id !== providerId ? p : { ...p, api_key: key }
-    );
-    updateAndSave({ ...config!, providers });
+  async function saveApiKey(providerId: string, key: string) {
+    await saveAuth(providerId, key);
+    setAuthMap((prev) => ({ ...prev, [providerId]: key.trim().length > 0 }));
   }
 
   function addModel(providerId: string, modelId: string) {
@@ -191,7 +196,7 @@ updateActive(provider.api_key).catch(console.error);
     setAddingModelProviderId(null);
   }
 
-  function addProvider(input: AddProviderPayload) {
+  async function addProvider(input: AddProviderPayload) {
     const nextProvider: Provider = {
       id: createProviderId(input.name, config!.providers),
       name: input.name,
@@ -200,7 +205,6 @@ updateActive(provider.api_key).catch(console.error);
       dual_protocol: input.dualProtocol,
       protocol: "Anthropic",
       auth_scheme: "ApiKey",
-      api_key: input.apiKey,
       models: input.modelIds.map((modelId) => ({
         id: modelId,
         name: modelId,
@@ -211,6 +215,10 @@ updateActive(provider.api_key).catch(console.error);
     };
 
     updateAndSave({ ...config!, providers: [...config!.providers, nextProvider] });
+    if (input.apiKey.trim().length > 0) {
+      await saveAuth(nextProvider.id, input.apiKey);
+      setAuthMap((prev) => ({ ...prev, [nextProvider.id]: true }));
+    }
   }
 
   const editingKeyProvider = editingKeyProviderId
@@ -295,7 +303,7 @@ updateActive(provider.api_key).catch(console.error);
                 await restoreBackup();
                 setAppStates(prev => ({ ...prev, cc: false }));
               } else {
-await injectProxy(config.port, activeProvider!.api_key);
+await injectProxy(config.port, await getAuth(activeProvider!.id) || "");
                 setAppStates(prev => ({ ...prev, cc: true }));
               }
             }}
@@ -317,7 +325,8 @@ await injectProxy(config.port, activeProvider!.api_key);
                 await removeCodex();
                 setAppStates(prev => ({ ...prev, codex: false }));
               } else {
-                await injectCodex(activeProvider!, config.port);
+                const apiKey = await getAuth(activeProvider!.id) || "";
+                await injectCodex(activeProvider!.id, apiKey, config.port);
                 setAppStates(prev => ({ ...prev, codex: true }));
               }
             }}
@@ -335,7 +344,8 @@ await injectProxy(config.port, activeProvider!.api_key);
                   await removeHermes(activeProvider!.id);
                   setAppStates(prev => ({ ...prev, hermes: false }));
                 } else {
-                  await injectHermes(activeProvider!, config.port);
+                  const apiKey = await getAuth(activeProvider!.id) || "";
+                  await injectHermes(activeProvider!.id, apiKey, config.port);
                   setAppStates(prev => ({ ...prev, hermes: true }));
                 }
               } catch (e) {
@@ -355,7 +365,8 @@ await injectProxy(config.port, activeProvider!.api_key);
                 await removeOpenclaw(activeProvider!.id);
                 setAppStates(prev => ({ ...prev, openclaw: false }));
               } else {
-                await injectOpenclaw(activeProvider!, config.port);
+                const apiKey = await getAuth(activeProvider!.id) || "";
+                await injectOpenclaw(activeProvider!.id, apiKey, activeProvider!.models, config.port);
                 setAppStates(prev => ({ ...prev, openclaw: true }));
               }
             }}
@@ -448,6 +459,7 @@ await injectProxy(config.port, activeProvider!.api_key);
           <ProviderCard
             key={p.id}
             provider={p}
+            hasKey={authMap[p.id] || false}
             isActive={activeQueueItem?.provider_id === p.id}
             onAddToQueue={addToQueue}
             onConfigKey={(id) => setEditingKeyProviderId(id)}
@@ -511,12 +523,15 @@ await injectProxy(config.port, activeProvider!.api_key);
             const next = { ...config, retry, port: newPort };
             updateAndSave(next);
             if (portChanged) {
-              restartProxy(newPort).then(() => {
+              restartProxy(newPort).then(async () => {
                 if (appStates.cc) {
                   const head = next.queue[0];
                   const p = head ? next.providers.find((pr) => pr.id === head.provider_id) : undefined;
-                  if (p && p.api_key.trim()) {
-injectProxy(newPort, p.api_key).catch(console.error);
+                  if (p) {
+                    const apiKey = await getAuth(p.id);
+                    if (apiKey && apiKey.trim().length > 0) {
+                      injectProxy(newPort, apiKey).catch(console.error);
+                    }
                   }
                 }
                 setShowSettings(false);
@@ -540,8 +555,8 @@ injectProxy(newPort, p.api_key).catch(console.error);
 
       {editingKeyProvider && (
         <ApiKeyModal
+          providerId={editingKeyProvider.id}
           providerName={editingKeyProvider.name}
-          currentKey={editingKeyProvider.api_key}
           onSave={(key) => saveApiKey(editingKeyProvider.id, key)}
           onClose={() => setEditingKeyProviderId(null)}
         />

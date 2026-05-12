@@ -137,7 +137,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
     };
 
     loop {
-        let (target_url, api_key, protocol, auth_scheme, model_id, provider_name) = {
+        let (target_url, protocol, auth_scheme, model_id, provider_name, provider_id) = {
             let r = state.router.read().await;
             match r.active_entry() {
                 Some((p, mid)) => {
@@ -163,11 +163,11 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                     };
                     (
                         target_url,
-                        p.api_key.clone(),
                         p.protocol.clone(),
                         p.effective_auth_scheme(),
                         mid.to_owned(),
                         p.name.clone(),
+                        p.id.clone(),
                     )
                 }
                 None => {
@@ -177,6 +177,12 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                     )
                 }
             }
+        };
+
+        // 从 auth_map 获取 api_key
+        let api_key = {
+            let r = state.router.read().await;
+            r.get_api_key(&provider_id).unwrap_or_default().to_owned()
         };
 
         // Rewrite the "model" field in the request body to match the queue item

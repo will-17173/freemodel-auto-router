@@ -43,8 +43,6 @@ pub struct Provider {
     pub protocol: Protocol,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_scheme: Option<AuthScheme>,
-    #[serde(default)]
-    pub api_key: String,
     pub models: Vec<Model>,
     #[serde(default = "default_true")]
     pub enabled: bool,

@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::fs;
 use std::path::PathBuf;
-use crate::config::Provider;
 
 fn codex_dir() -> PathBuf {
     dirs::home_dir()
@@ -9,14 +8,14 @@ fn codex_dir() -> PathBuf {
         .join(".codex")
 }
 
-pub fn inject(provider: &Provider, port: u16) -> Result<()> {
+pub fn inject(provider_id: &str, api_key: &str, port: u16) -> Result<()> {
     let dir = codex_dir();
     fs::create_dir_all(&dir)?;
 
     // auth.json
     let auth_path = dir.join("auth.json");
     let auth_tmp = auth_path.with_extension("tmp");
-    let auth_json = serde_json::json!({ "OPENAI_API_KEY": provider.api_key });
+    let auth_json = serde_json::json!({ "OPENAI_API_KEY": api_key });
     fs::write(&auth_tmp, serde_json::to_string_pretty(&auth_json)?)?;
     fs::rename(&auth_tmp, &auth_path)?;
 

@@ -15,7 +15,6 @@ export interface Provider {
   dual_protocol: boolean;
   protocol: Protocol;
   auth_scheme?: AuthScheme;
-  api_key: string;
   models: Model[];
   enabled: boolean;
   priority: number;

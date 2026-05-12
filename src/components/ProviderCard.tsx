@@ -2,15 +2,14 @@ import type { Provider } from "../types";
 
 interface Props {
   provider: Provider;
+  hasKey: boolean;
   isActive: boolean;
   onAddToQueue: (providerId: string, modelId: string) => void;
   onConfigKey: (providerId: string) => void;
   onAddModel: (providerId: string) => void;
 }
 
-export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey, onAddModel }: Props) {
-  const hasKey = provider.api_key.trim().length > 0;
-
+export function ProviderCard({ provider, hasKey, isActive, onAddToQueue, onConfigKey, onAddModel }: Props) {
   return (
     <div className={isActive ? "fm-card-active" : "fm-card"} style={{ position: "relative" }}>
       {isActive && (
