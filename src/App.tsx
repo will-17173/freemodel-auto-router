@@ -182,7 +182,9 @@ updateActive(provider.api_key).catch(console.error);
     const nextProvider: Provider = {
       id: createProviderId(input.name, config!.providers),
       name: input.name,
-      base_url: input.baseUrl,
+      anthropic_url: input.anthropicUrl,
+      openai_url: input.openaiUrl,
+      dual_protocol: input.dualProtocol,
       protocol: "Anthropic",
       auth_scheme: "ApiKey",
       api_key: input.apiKey,

@@ -3,7 +3,9 @@ import { useMemo, useState } from "react";
 export interface AddProviderPayload {
   name: string;
   apiKey: string;
-  baseUrl: string;
+  anthropicUrl: string;
+  openaiUrl: string;
+  dualProtocol: boolean;
   modelIds: string[];
 }
 
@@ -27,16 +29,22 @@ function parseModelIds(value: string) {
 export function AddProviderModal({ onSave, onClose }: Props) {
   const [name, setName] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [baseUrl, setBaseUrl] = useState("");
+  const [anthropicUrl, setAnthropicUrl] = useState("");
+  const [openaiUrl, setOpenaiUrl] = useState("");
+  const [dualProtocol, setDualProtocol] = useState(true); // 默认勾选：单一地址模式
   const [models, setModels] = useState("");
   const [error, setError] = useState("");
 
   const modelIds = useMemo(() => parseModelIds(models), [models]);
 
+  // 当勾选 dualProtocol 时，openaiUrl 与 anthropicUrl 相同
+  const effectiveOpenaiUrl = dualProtocol ? anthropicUrl : openaiUrl;
+
   function handleSave() {
     const nextName = name.trim();
     const nextApiKey = apiKey.trim();
-    const nextBaseUrl = baseUrl.trim();
+    const nextAnthropicUrl = anthropicUrl.trim();
+    const nextOpenaiUrl = effectiveOpenaiUrl.trim();
 
     if (!nextName) {
       setError("请填写供应商名");
@@ -46,8 +54,12 @@ export function AddProviderModal({ onSave, onClose }: Props) {
       setError("请填写 API Key");
       return;
     }
-    if (!nextBaseUrl) {
-      setError("请填写 Base URL");
+    if (!nextAnthropicUrl) {
+      setError("请填写 Anthropic URL");
+      return;
+    }
+    if (!dualProtocol && !nextOpenaiUrl) {
+      setError("请填写 OpenAI URL");
       return;
     }
     if (modelIds.length === 0) {
@@ -58,7 +70,9 @@ export function AddProviderModal({ onSave, onClose }: Props) {
     onSave({
       name: nextName,
       apiKey: nextApiKey,
-      baseUrl: nextBaseUrl.replace(/\/+$/, ""),
+      anthropicUrl: nextAnthropicUrl.replace(/\/+$/, ""),
+      openaiUrl: nextOpenaiUrl.replace(/\/+$/, ""),
+      dualProtocol,
       modelIds,
     });
     onClose();
@@ -90,7 +104,7 @@ export function AddProviderModal({ onSave, onClose }: Props) {
               <span className="fm-headline-sm">添加供应商</span>
             </div>
             <p className="fm-body-sm" style={{ margin: "0 0 0 25px", color: "var(--fm-ink-muted)" }}>
-              仅支持 Anthropic 协议，Base URL 需兼容 Anthropic Messages API。
+              配置 Anthropic 和 OpenAI 双协议 URL，或勾选单一地址兼容模式。
             </p>
           </div>
           <button
@@ -143,17 +157,43 @@ export function AddProviderModal({ onSave, onClose }: Props) {
               />
             </label>
 
-            <label>
-              <span className="fm-section-eyebrow" style={{ display: "block", marginBottom: "8px" }}>Base URL</span>
+            {/* 单一地址兼容模式 checkbox */}
+            <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
               <input
-                value={baseUrl}
-                onChange={(e) => { setBaseUrl(e.target.value); setError(""); }}
+                type="checkbox"
+                checked={dualProtocol}
+                onChange={(e) => { setDualProtocol(e.target.checked); setError(""); }}
+                style={{ width: "15px", height: "15px", accentColor: "var(--fm-color-ink)", cursor: "pointer" }}
+              />
+              <span className="fm-body-sm">单一地址兼容模式（Anthropic / OpenAI 使用同一个 URL）</span>
+            </label>
+
+            <label>
+              <span className="fm-section-eyebrow" style={{ display: "block", marginBottom: "8px" }}>Anthropic URL</span>
+              <input
+                value={anthropicUrl}
+                onChange={(e) => { setAnthropicUrl(e.target.value); setError(""); }}
                 onKeyDown={handleKeyDown}
                 placeholder="https://api.example.com"
                 className="fm-input"
                 style={{ fontFamily: "var(--fm-font-mono)", fontSize: "13px" }}
               />
             </label>
+
+            {/* OpenAI URL - 仅在非单一地址模式时显示 */}
+            {!dualProtocol && (
+              <label>
+                <span className="fm-section-eyebrow" style={{ display: "block", marginBottom: "8px" }}>OpenAI URL</span>
+                <input
+                  value={openaiUrl}
+                  onChange={(e) => { setOpenaiUrl(e.target.value); setError(""); }}
+                  onKeyDown={handleKeyDown}
+                  placeholder="https://api.example.com/openai"
+                  className="fm-input"
+                  style={{ fontFamily: "var(--fm-font-mono)", fontSize: "13px" }}
+                />
+              </label>
+            )}
 
             <label>
               <span className="fm-section-eyebrow" style={{ display: "block", marginBottom: "8px" }}>模型列表</span>
