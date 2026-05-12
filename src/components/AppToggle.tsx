@@ -10,7 +10,8 @@ interface AppToggleProps {
 }
 
 export function AppToggle({ icon, color, enabled, disabled, title, onToggle }: AppToggleProps) {
-  const borderColor = enabled ? color : "var(--fm-color-hairline)";
+  // 边框和图标背景始终使用原色，不随 enabled 状态变灰
+  const borderColor = color;
 
   return (
     <div
@@ -24,8 +25,7 @@ export function AppToggle({ icon, color, enabled, disabled, title, onToggle }: A
         padding: "5px 10px",
         border: `1px solid ${borderColor}`,
         cursor: disabled ? "not-allowed" : "pointer",
-        opacity: disabled ? 0.45 : 1,
-        transition: "border-color 0.2s, opacity 0.2s",
+        transition: "border-color 0.2s",
         userSelect: "none",
       }}
       onClick={async () => {
@@ -45,7 +45,7 @@ export function AppToggle({ icon, color, enabled, disabled, title, onToggle }: A
         width: "24px",
         height: "24px",
         borderRadius: "4px",
-        background: enabled ? color : "var(--fm-color-hairline)",
+        background: color,
         transition: "background 0.2s",
       }}>
         {icon}
