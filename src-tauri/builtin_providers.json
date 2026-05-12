@@ -2,7 +2,9 @@
   {
     "id": "openrouter",
     "name": "OpenRouter",
-    "base_url": "https://openrouter.ai/api",
+    "anthropic_url": "https://openrouter.ai/api",
+    "openai_url": "https://openrouter.ai/api",
+    "dual_protocol": true,
     "protocol": "Anthropic",
     "auth_scheme": "Bearer",
     "models": [
@@ -31,7 +33,9 @@
   {
     "id": "longcat",
     "name": "美团 LongCat",
-    "base_url": "https://api.longcat.chat/anthropic",
+    "anthropic_url": "https://api.longcat.chat/anthropic",
+    "openai_url": "https://api.longcat.chat/openai",
+    "dual_protocol": false,
     "protocol": "Anthropic",
     "auth_scheme": "Bearer",
     "models": [
