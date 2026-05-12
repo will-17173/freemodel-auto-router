@@ -32,7 +32,7 @@ fn write_settings(val: &Value) -> Result<()> {
 }
 
 fn local_base_url(port: u16) -> String {
-    format!("http://localhost:{}", port)
+    format!("http://localhost:{}/anthropic", port)
 }
 
 const MANAGED_ENV_KEYS: [&str; 3] = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL"];
