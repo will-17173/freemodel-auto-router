@@ -124,6 +124,19 @@ updateActive(provider.api_key).catch(console.error);
       : undefined,
   ]);
 
+  // 初始化时检查 Hermes 配置状态（必须在所有早期 return 之前）
+  useEffect(() => {
+    if (!config) return;
+    const activeItem = config.queue[activeIdx];
+    const provider = activeItem
+      ? config.providers.find((p) => p.id === activeItem.provider_id)
+      : undefined;
+    if (!provider) return;
+    isHermesInjected(provider.id)
+      .then((v) => setAppStates(prev => ({ ...prev, hermes: v })))
+      .catch(console.error);
+  }, [config, activeIdx]);
+
   if (!config) return (
     <div style={{ background: "var(--fm-color-canvas)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
@@ -215,13 +228,6 @@ updateActive(provider.api_key).catch(console.error);
   const activeModel = activeProvider?.models.find((m) => m.id === activeQueueItem?.model_id);
   const isActive = !!(activeProvider && activeModel);
 
-  // 初始化时检查 Hermes 配置状态
-  useEffect(() => {
-    if (!activeProvider) return;
-    isHermesInjected(activeProvider.id)
-      .then((v) => setAppStates(prev => ({ ...prev, hermes: v })))
-      .catch(console.error);
-  }, [activeProvider?.id]);
 
   return (
     <div style={{

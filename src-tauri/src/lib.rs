@@ -137,8 +137,29 @@ async fn save_config_cmd(
 }
 
 #[tauri::command]
-fn inject_proxy_cmd(port: u16, auth_token: String) -> Result<(), String> {
-    claude_settings::inject_proxy(port, &auth_token).map_err(|e| e.to_string())
+fn inject_proxy_cmd(
+    port: u16,
+    auth_token: String,
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match claude_settings::inject_proxy(port, &auth_token) {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "Claude Code 注入已开启",
+                [("app", "Claude Code"), ("action", "inject"), ("port", &port.to_string())],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("Claude Code 注入失败: {e}"),
+                [("app", "Claude Code"), ("action", "inject"), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -147,13 +168,51 @@ fn update_active_cmd(auth_token: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn remove_proxy_cmd() -> Result<(), String> {
-    claude_settings::remove_proxy().map_err(|e| e.to_string())
+fn remove_proxy_cmd(
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match claude_settings::remove_proxy() {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "Claude Code 注入已关闭",
+                [("app", "Claude Code"), ("action", "remove")],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("Claude Code 注入关闭失败: {e}"),
+                [("app", "Claude Code"), ("action", "remove"), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
-fn restore_backup_cmd() -> Result<(), String> {
-    claude_settings::restore_backup().map_err(|e| e.to_string())
+fn restore_backup_cmd(
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match claude_settings::restore_backup() {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "Claude Code 配置已恢复备份",
+                [("app", "Claude Code"), ("action", "restore")],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("Claude Code 配置恢复失败: {e}"),
+                [("app", "Claude Code"), ("action", "restore"), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -209,23 +268,104 @@ async fn restart_proxy_cmd(
 }
 
 #[tauri::command]
-fn inject_codex_cmd(provider: config::Provider, port: u16) -> Result<(), String> {
-    codex_settings::inject(&provider, port).map_err(|e| e.to_string())
+fn inject_codex_cmd(
+    provider: config::Provider,
+    port: u16,
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match codex_settings::inject(&provider, port) {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "Codex 注入已开启",
+                [("app", "Codex"), ("action", "inject"), ("provider", &provider.name.clone()), ("port", &port.to_string())],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("Codex 注入失败: {e}"),
+                [("app", "Codex"), ("action", "inject"), ("provider", &provider.name.clone()), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
-fn remove_codex_cmd() -> Result<(), String> {
-    codex_settings::remove().map_err(|e| e.to_string())
+fn remove_codex_cmd(
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match codex_settings::remove() {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "Codex 注入已关闭",
+                [("app", "Codex"), ("action", "remove")],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("Codex 注入关闭失败: {e}"),
+                [("app", "Codex"), ("action", "remove"), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
-fn inject_hermes_cmd(provider: config::Provider, port: u16) -> Result<(), String> {
-    hermes_settings::inject(&provider, port).map_err(|e| e.to_string())
+fn inject_hermes_cmd(
+    provider: config::Provider,
+    port: u16,
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match hermes_settings::inject(&provider, port) {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "Hermes 注入已开启",
+                [("app", "Hermes"), ("action", "inject"), ("provider", &provider.name.clone()), ("port", &port.to_string())],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("Hermes 注入失败: {e}"),
+                [("app", "Hermes"), ("action", "inject"), ("provider", &provider.name.clone()), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
-fn remove_hermes_cmd(provider_id: String) -> Result<(), String> {
-    hermes_settings::remove(&provider_id).map_err(|e| e.to_string())
+fn remove_hermes_cmd(
+    provider_id: String,
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match hermes_settings::remove(&provider_id) {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "Hermes 注入已关闭",
+                [("app", "Hermes"), ("action", "remove"), ("provider_id", &provider_id)],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("Hermes 注入关闭失败: {e}"),
+                [("app", "Hermes"), ("action", "remove"), ("provider_id", &provider_id), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
@@ -234,13 +374,54 @@ fn is_hermes_injected_cmd(provider_id: String) -> bool {
 }
 
 #[tauri::command]
-fn inject_openclaw_cmd(provider: config::Provider, port: u16) -> Result<(), String> {
-    openclaw_settings::inject(&provider, port).map_err(|e| e.to_string())
+fn inject_openclaw_cmd(
+    provider: config::Provider,
+    port: u16,
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match openclaw_settings::inject(&provider, port) {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "OpenClaw 注入已开启",
+                [("app", "OpenClaw"), ("action", "inject"), ("provider", &provider.name.clone()), ("port", &port.to_string())],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("OpenClaw 注入失败: {e}"),
+                [("app", "OpenClaw"), ("action", "inject"), ("provider", &provider.name.clone()), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
-fn remove_openclaw_cmd(provider_id: String) -> Result<(), String> {
-    openclaw_settings::remove(&provider_id).map_err(|e| e.to_string())
+fn remove_openclaw_cmd(
+    provider_id: String,
+    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
+) -> Result<(), String> {
+    match openclaw_settings::remove(&provider_id) {
+        Ok(()) => {
+            logs.push(
+                proxy_log::LogLevel::Info,
+                "OpenClaw 注入已关闭",
+                [("app", "OpenClaw"), ("action", "remove"), ("provider_id", &provider_id)],
+            );
+            Ok(())
+        }
+        Err(e) => {
+            logs.push(
+                proxy_log::LogLevel::Error,
+                format!("OpenClaw 注入关闭失败: {e}"),
+                [("app", "OpenClaw"), ("action", "remove"), ("provider_id", &provider_id), ("error", &e.to_string())],
+            );
+            Err(e.to_string())
+        }
+    }
 }
 
 #[tauri::command]
