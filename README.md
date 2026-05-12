@@ -42,8 +42,11 @@ Claude Code  ──►  http://localhost:7860 (axum proxy)
 
 - 黑白编辑风的供应商卡片网格 UI（Figma 风格设计系统，见 `DESIGN.md`）
 - `@dnd-kit` 拖拽排序路由队列
-- OpenAI / Anthropic 双协议支持
+- OpenAI / Anthropic 双协议支持，可选 `auth_scheme`（Bearer / ApiKey）
 - 重试次数、重试间隔可配置
+- 可配置代理端口（默认 7860），修改后重启生效
+- 实时代理日志面板，自动过滤敏感字段
+- 添加自定义供应商 Modal
 - 关闭窗口时收起到系统托盘，进程退出时自动清理 Claude Code 配置
 - 供应商切换时弹出系统通知（`tauri-plugin-notification`）
 
@@ -90,29 +93,35 @@ pnpm build
 
 ## 配置文件
 
-`~/.config/freemodel/config.json`
+`config.json`（位于项目根目录）
 
 ```json
 {
   "providers": [
     {
-      "id": "...",
-      "name": "Provider A",
-      "base_url": "https://api.example.com",
-      "protocol": "OpenAI",
-      "api_key": "sk-...",
-      "models": [{ "id": "gpt-4o", "name": "GPT-4o", "enabled": true }],
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "base_url": "https://openrouter.ai/api",
+      "protocol": "Anthropic",
+      "auth_scheme": "Bearer",
+      "api_key": "sk-or-...",
+      "models": [
+        { "id": "nvidia/nemotron-3-super", "name": "NVIDIA: Nemotron 3 Super", "enabled": true },
+        { "id": "baidu/cobuddy", "name": "Baidu Qianfan: CoBuddy", "enabled": false },
+        { "id": "minimax/minimax-m2.5", "name": "MiniMax: MiniMax M2.5", "enabled": false }
+      ],
       "enabled": true,
-      "priority": 0
+      "priority": 100
     }
   ],
   "retry": {
-    "max_retries": 3,
-    "retry_delay_secs": 1
+    "max_retries": 2,
+    "retry_delay_secs": 3
   },
   "queue": [
-    { "provider_id": "...", "model_id": "gpt-4o" }
-  ]
+    { "provider_id": "openrouter", "model_id": "nvidia/nemotron-3-super" }
+  ],
+  "port": 7860
 }
 ```
 
@@ -134,19 +143,22 @@ pnpm build
 ```
 src-tauri/src/
   ├── lib.rs              # Tauri 入口，注册命令，启动代理
-  ├── config.rs           # AppConfig / Provider / QueueItem 结构与读写
+  ├── config.rs           # AppConfig / Provider / QueueItem / AuthScheme 结构与读写
   ├── router.rs           # RouterState：队列与失败计数，record_failure 切换逻辑
-  ├── proxy.rs            # axum HTTP 代理，rewrite_model_field，重试 429/503
-  └── claude_settings.rs  # 原子写入 ~/.claude/settings.json
+  ├── proxy.rs            # axum HTTP 代理，rewrite_model_field，重试 429/503/500/502/504
+  ├── proxy_log.rs        # ProxyLogStore：环形缓冲日志，敏感字段过滤
+  └── claude_settings.rs  # 原子写入 ~/.claude/settings.json，env 三键备份恢复
 
 src/
   ├── App.tsx                       # 唯一状态容器
-  ├── api.ts                        # invoke get_config / save_config_cmd
+  ├── api.ts                        # invoke get_config / save_config_cmd / get_proxy_logs
   ├── types.ts                      # 与 Rust 结构体一一对应
   └── components/
       ├── ProviderCard.tsx          # 供应商卡片
       ├── QueuePanel.tsx            # 路由队列（拖拽排序）
-      ├── SettingsModal.tsx         # 重试设置
+      ├── AddProviderModal.tsx      # 添加自定义供应商
+      ├── ProxyLogPanel.tsx         # 代理日志面板
+      ├── SettingsModal.tsx         # 重试/端口设置
       └── ApiKeyModal.tsx           # API Key 输入
 ```
 

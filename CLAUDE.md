@@ -59,28 +59,34 @@ Claude Code → http://localhost:7860 (axum proxy)
 
 | 文件 | 职责 |
 |---|---|
-| `config.rs` | `AppConfig` / `Provider` / `QueueItem` 结构体，读写 `~/.config/freemodel/config.json` |
+| `config.rs` | `AppConfig` / `Provider` / `QueueItem` / `AuthScheme` 结构体，读写 `config.json`；默认端口 7860 |
 | `router.rs` | `RouterState` — 维护 `active_idx` 和 `fail_counts`；`record_failure()` 超过 `max_retries` 后自增索引 |
-| `proxy.rs` | axum HTTP 代理；`rewrite_model_field()` 替换请求体中的 `model` 字段；重试状态码：429、503 |
-| `claude_settings.rs` | 原子写入 `~/.claude/settings.json`（先写 `.tmp` 再 rename），注入/移除 `apiBaseUrl` |
-| `lib.rs` | Tauri 应用入口；注册两个 commands：`get_config`、`save_config_cmd` |
+| `proxy.rs` | axum HTTP 代理；`rewrite_model_field()` 替换请求体中的 `model` 字段；保留 Anthropic 端到端头；重试状态码：429、503、500、502、504 |
+| `proxy_log.rs` | `ProxyLogStore` — 环形缓冲日志存储（默认容量 200），自动过滤敏感字段；`ProxyLogEntry` 通过 Tauri command 暴露给前端 |
+| `claude_settings.rs` | 原子写入 `~/.claude/settings.json`（先写 `.tmp` 再 rename），注入/移除 `apiBaseUrl`；env 三键备份恢复机制 |
+| `lib.rs` | Tauri 应用入口；注册 commands：`get_config`、`save_config_cmd`、`get_proxy_logs`、`update_active_cmd`、`restore_backup_cmd` 等 |
 
 ### 前端（`src/`）
 
-- **`types.ts`** — 与后端 Rust 结构体一一对应的 TypeScript 类型（`Protocol` 为 `"OpenAI" | "Anthropic"`）
-- **`api.ts`**（从 App.tsx import）— 封装 `invoke("get_config")` / `invoke("save_config_cmd")`
-- **`App.tsx`** — 唯一状态容器，通过 `updateAndSave()` 同步更新本地状态和持久化配置
+- **`types.ts`** — 与后端 Rust 结构体一一对应的 TypeScript 类型（`Protocol` 为 `"OpenAI" | "Anthropic"`；`AuthScheme` 为 `"Bearer" | "ApiKey"`）
+- **`api.ts`**（从 App.tsx import）— 封装 `invoke("get_config")` / `invoke("save_config_cmd")` / `invoke("get_proxy_logs")` 等
+- **`App.tsx`** — 唯一状态容器，通过 `updateAndSave()` 同步更新本地状态和持久化配置；监听 `provider-switched` 事件触发系统通知
 - **`components/ProviderCard.tsx`** — 供应商卡片，显示状态/模型列表，触发加入队列或配置 API Key
 - **`components/QueuePanel.tsx`** — 路由队列，支持 `@dnd-kit` 拖拽排序
-- **`components/SettingsModal.tsx`** — 重试次数/间隔设置
+- **`components/AddProviderModal.tsx`** — 添加自定义供应商的 Modal，输入名称、API Key、base_url 和模型列表
+- **`components/ProxyLogPanel.tsx`** — 代理日志面板，实时显示请求转发记录，自动滚动
+- **`components/SettingsModal.tsx`** — 重试次数/间隔/端口设置
 - **`components/ApiKeyModal.tsx`** — 供应商 API Key 输入
 
 ### 关键设计约束
 
 - **队列第 0 项是活跃路由**：`config.queue[0]` 即当前使用的 `(provider_id, model_id)`，前端展示时以此为准
 - **协议差异**：`OpenAI` 协议用 `Authorization: Bearer <key>`；`Anthropic` 协议用 `x-api-key` + `anthropic-version: 2023-06-01` 头
+- **auth_scheme 字段**：可选，默认按 provider.id 和 protocol 推断（OpenRouter/OpenAI → Bearer，其他 → ApiKey）
 - **model 字段重写**：代理会将请求体中的 `model` 字段覆盖为队列项指定的 `model_id`，客户端传什么值无关紧要
 - **配置持久化**：前端每次变更都即时调用 `save_config_cmd`，无"保存"按钮（乐观更新）
+- **端口可配置**：`config.port` 默认 7860，前端设置 Modal 可修改，修改后重启生效
+- **日志敏感字段过滤**：`proxy_log.rs` 自动将 `authorization`/`api-key`/`token` 等字段替换为 `[redacted]`
 
 ## UI 设计系统
 
