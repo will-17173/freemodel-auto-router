@@ -136,13 +136,13 @@ async fn save_config_cmd(
 }
 
 #[tauri::command]
-fn inject_proxy_cmd(port: u16, auth_token: String, model: String) -> Result<(), String> {
-    claude_settings::inject_proxy(port, &auth_token, &model).map_err(|e| e.to_string())
+fn inject_proxy_cmd(port: u16, auth_token: String) -> Result<(), String> {
+    claude_settings::inject_proxy(port, &auth_token).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-fn update_active_cmd(auth_token: String, model: String) -> Result<(), String> {
-    claude_settings::update_active(&auth_token, &model).map_err(|e| e.to_string())
+fn update_active_cmd(auth_token: String) -> Result<(), String> {
+    claude_settings::update_active(&auth_token).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

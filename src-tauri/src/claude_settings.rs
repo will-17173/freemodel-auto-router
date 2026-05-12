@@ -37,10 +37,8 @@ fn local_base_url(port: u16) -> String {
 
 const MANAGED_ENV_KEYS: [&str; 3] = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL"];
 
-/// 注入代理：把 env.ANTHROPIC_BASE_URL 指到本地代理，
-/// 同时写入 ANTHROPIC_AUTH_TOKEN 和 ANTHROPIC_MODEL 给 Claude Code 用。
-/// 原值全部备份到顶层 `_fm_backup`，只在第一次注入时记录。
-pub fn inject_proxy(port: u16, auth_token: &str, model: &str) -> Result<()> {
+/// 注入代理：把 env.ANTHROPIC_BASE_URL 指到本地代理，同时写入 ANTHROPIC_AUTH_TOKEN。模型固定为 "freemodel-auto"，实际模型由代理层 rewrite。
+pub fn inject_proxy(port: u16, auth_token: &str) -> Result<()> {
     let mut val = read_settings()?;
 
     let already_injected = val
@@ -87,7 +85,7 @@ pub fn inject_proxy(port: u16, auth_token: &str, model: &str) -> Result<()> {
             );
             env_obj.insert(
                 "ANTHROPIC_MODEL".to_string(),
-                Value::String(model.to_string()),
+                Value::String("freemodel-auto".to_string()),
             );
         }
         obj.remove("apiBaseUrl");
@@ -97,9 +95,9 @@ pub fn inject_proxy(port: u16, auth_token: &str, model: &str) -> Result<()> {
     Ok(())
 }
 
-/// 队列首项变更后，仅刷新 ANTHROPIC_AUTH_TOKEN 和 ANTHROPIC_MODEL，
+/// 队列首项变更后，仅刷新 ANTHROPIC_AUTH_TOKEN，模型始终为 "freemodel-auto"。
 /// 不动 base url，也不重新写备份。仅在已注入状态下应该被调用。
-pub fn update_active(auth_token: &str, model: &str) -> Result<()> {
+pub fn update_active(auth_token: &str) -> Result<()> {
     let mut val = read_settings()?;
     let injected = val
         .get("env")
@@ -117,7 +115,7 @@ pub fn update_active(auth_token: &str, model: &str) -> Result<()> {
         );
         env.insert(
             "ANTHROPIC_MODEL".to_string(),
-            Value::String(model.to_string()),
+            Value::String("freemodel-auto".to_string()),
         );
     }
     write_settings(&val)?;

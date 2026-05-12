@@ -21,7 +21,7 @@ pub fn inject(provider: &Provider) -> Result<()> {
     fs::rename(&auth_tmp, &auth_path)?;
 
     // config.toml
-    let model_id = provider.models.first().map(|m| m.id.as_str()).unwrap_or("");
+    let model_id = "freemodel-auto";
     let config_content = format!(
         "model = \"{}\"\n\n[provider]\nbase_url = \"{}\"\n",
         model_id, provider.base_url

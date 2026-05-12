@@ -112,7 +112,7 @@ export default function App() {
     if (!head) return;
     const provider = config.providers.find((p) => p.id === head.provider_id);
     if (!provider || provider.api_key.trim().length === 0) return;
-    updateActive(provider.api_key, head.model_id).catch(console.error);
+updateActive(provider.api_key).catch(console.error);
   }, [
     appStates.cc,
     config?.queue[0]?.provider_id,
@@ -263,7 +263,7 @@ export default function App() {
                 await restoreBackup();
                 setAppStates(prev => ({ ...prev, cc: false }));
               } else {
-                await injectProxy(config.port, activeProvider!.api_key, activeModel!.id);
+await injectProxy(config.port, activeProvider!.api_key);
                 setAppStates(prev => ({ ...prev, cc: true }));
               }
             }}
@@ -479,7 +479,7 @@ export default function App() {
                   const head = next.queue[0];
                   const p = head ? next.providers.find((pr) => pr.id === head.provider_id) : undefined;
                   if (p && p.api_key.trim()) {
-                    injectProxy(newPort, p.api_key, head.model_id).catch(console.error);
+injectProxy(newPort, p.api_key).catch(console.error);
                   }
                 }
                 setShowSettings(false);

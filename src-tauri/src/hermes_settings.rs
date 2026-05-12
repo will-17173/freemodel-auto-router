@@ -26,7 +26,7 @@ pub fn inject(provider: &Provider) -> Result<()> {
         serde_yaml::from_str(&content)?
     };
 
-    let model_id = provider.models.first().map(|m| m.id.as_str()).unwrap_or("").to_string();
+    let model_id = "freemodel-auto".to_string();
 
     // Build the provider entry
     let mut provider_entry = serde_yaml::Mapping::new();
