@@ -1,0 +1,62 @@
+use anyhow::Result;
+use std::fs;
+use std::path::PathBuf;
+use crate::config::Provider;
+
+fn codex_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".codex")
+}
+
+pub fn inject(provider: &Provider) -> Result<()> {
+    let dir = codex_dir();
+    fs::create_dir_all(&dir)?;
+
+    // auth.json
+    let auth_path = dir.join("auth.json");
+    let auth_tmp = auth_path.with_extension("tmp");
+    let auth_json = serde_json::json!({ "OPENAI_API_KEY": provider.api_key });
+    fs::write(&auth_tmp, serde_json::to_string_pretty(&auth_json)?)?;
+    fs::rename(&auth_tmp, &auth_path)?;
+
+    // config.toml
+    let model_id = provider.models.first().map(|m| m.id.as_str()).unwrap_or("");
+    let config_content = format!(
+        "model = \"{}\"\n\n[provider]\nbase_url = \"{}\"\n",
+        model_id, provider.base_url
+    );
+    let config_path = dir.join("config.toml");
+    let config_tmp = config_path.with_extension("tmp");
+    fs::write(&config_tmp, &config_content)?;
+    fs::rename(&config_tmp, &config_path)?;
+
+    Ok(())
+}
+
+pub fn remove() -> Result<()> {
+    let dir = codex_dir();
+
+    let auth_path = dir.join("auth.json");
+    if auth_path.exists() {
+        let auth_tmp = auth_path.with_extension("tmp");
+        fs::write(&auth_tmp, "{}")?;
+        fs::rename(&auth_tmp, &auth_path)?;
+    }
+
+    let config_path = dir.join("config.toml");
+    if config_path.exists() {
+        let content = fs::read_to_string(&config_path).unwrap_or_default();
+        // Remove the [provider] section and everything after it
+        let cleaned = content
+            .lines()
+            .take_while(|line| !line.trim_start().starts_with("[provider]"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let config_tmp = config_path.with_extension("tmp");
+        fs::write(&config_tmp, cleaned.trim_end())?;
+        fs::rename(&config_tmp, &config_path)?;
+    }
+
+    Ok(())
+}

@@ -17,21 +17,26 @@ import type { QueueItem, Provider } from "../types";
 interface Props {
   queue: QueueItem[];
   providers: Provider[];
+  exhaustedIndices: number[];
+  activeIdx: number;
   onReorder: (newQueue: QueueItem[]) => void;
   onRemove: (index: number) => void;
+  onResetExhausted: () => void;
 }
 
 function SortableQueueItem({
   item,
   index,
   label,
-  isFirst,
+  isActive,
+  isExhausted,
   onRemove,
 }: {
   item: QueueItem;
   index: number;
   label: string;
-  isFirst: boolean;
+  isActive: boolean;
+  isExhausted: boolean;
   onRemove: (i: number) => void;
 }) {
   const uid = `${item.provider_id}::${item.model_id}::${index}`;
@@ -40,7 +45,7 @@ function SortableQueueItem({
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.4 : 1,
+    opacity: isDragging ? 0.4 : isExhausted ? 0.4 : 1,
     zIndex: isDragging ? 10 : undefined,
   };
 
@@ -48,12 +53,12 @@ function SortableQueueItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={isFirst ? "fm-queue-chip fm-queue-chip-first" : "fm-queue-chip"}
+      className={isActive ? "fm-queue-chip fm-queue-chip-first" : "fm-queue-chip"}
     >
       {/* Priority number */}
       <span className="fm-caption" style={{
         fontWeight: 600,
-        color: "var(--fm-color-ink)",
+        color: isExhausted ? "var(--fm-ink-faint)" : "var(--fm-color-ink)",
         minWidth: "14px",
         textAlign: "center",
         flexShrink: 0,
@@ -61,8 +66,8 @@ function SortableQueueItem({
         {index + 1}
       </span>
 
-      {/* Current route indicator for first item */}
-      {isFirst && (
+      {/* Current route indicator for active item */}
+      {isActive && !isExhausted && (
         <span className="fm-caption" style={{
           background: "var(--fm-success)",
           color: "#ffffff",
@@ -78,12 +83,29 @@ function SortableQueueItem({
         </span>
       )}
 
+      {/* Exhausted indicator */}
+      {isExhausted && (
+        <span className="fm-caption" style={{
+          background: "var(--fm-ink-faint)",
+          color: "#ffffff",
+          borderRadius: "4px",
+          padding: "2px 6px",
+          fontSize: "11px",
+          fontWeight: 600,
+          letterSpacing: "0.6px",
+          textTransform: "uppercase",
+          flexShrink: 0,
+        }}>
+          已用尽
+        </span>
+      )}
+
       {/* Drag handle */}
       <span
         {...attributes}
         {...listeners}
         style={{
-          color: "var(--fm-ink-faint)",
+          color: isExhausted ? "var(--fm-ink-faint)" : "var(--fm-ink-faint)",
           cursor: "grab",
           flexShrink: 0,
           display: "flex",
@@ -98,7 +120,10 @@ function SortableQueueItem({
         </svg>
       </span>
 
-      <span className="fm-body-sm" style={{ fontWeight: 500 }}>
+      <span className="fm-body-sm" style={{
+        fontWeight: 500,
+        color: isExhausted ? "var(--fm-ink-faint)" : "var(--fm-color-ink)",
+      }}>
         {label}
       </span>
 
@@ -128,7 +153,7 @@ function SortableQueueItem({
   );
 }
 
-export function QueuePanel({ queue, providers, onReorder, onRemove }: Props) {
+export function QueuePanel({ queue, providers, exhaustedIndices, activeIdx, onReorder, onRemove, onResetExhausted }: Props) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   );
@@ -153,6 +178,9 @@ export function QueuePanel({ queue, providers, onReorder, onRemove }: Props) {
     return `${provider?.name ?? item.provider_id} / ${model?.name ?? item.model_id}`;
   }
 
+  // 判断是否有已用尽的项
+  const hasExhausted = exhaustedIndices.length > 0;
+
   return (
     <div style={{
       padding: "12px 24px 18px",
@@ -163,18 +191,39 @@ export function QueuePanel({ queue, providers, onReorder, onRemove }: Props) {
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <span className="fm-eyebrow">路由队列</span>
         </div>
-        {queue.length > 0 && (
-          <span className="fm-caption" style={{
-            color: "var(--fm-color-ink)",
-            background: "#ffffff",
-            border: "1px solid var(--fm-color-hairline)",
-            borderRadius: "var(--fm-radius-full)",
-            padding: "2px 8px",
-            fontWeight: 500,
-          }}>
-            {queue.length}
-          </span>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {queue.length > 0 && (
+            <span className="fm-caption" style={{
+              color: "var(--fm-color-ink)",
+              background: "#ffffff",
+              border: "1px solid var(--fm-color-hairline)",
+              borderRadius: "var(--fm-radius-full)",
+              padding: "2px 8px",
+              fontWeight: 500,
+            }}>
+              {queue.length}
+            </span>
+          )}
+          {hasExhausted && (
+            <button
+              className="fm-btn-text"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                color: "var(--fm-magenta)",
+                fontSize: "12px",
+              }}
+              onClick={onResetExhausted}
+            >
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M2 8a6 6 0 1012 0A6 6 0 102 8"/>
+                <path d="M8 5v3l2 2"/>
+              </svg>
+              重置
+            </button>
+          )}
+        </div>
       </div>
 
       {queue.length === 0 ? (
@@ -196,7 +245,8 @@ export function QueuePanel({ queue, providers, onReorder, onRemove }: Props) {
                   item={item}
                   index={i}
                   label={getLabel(item)}
-                  isFirst={i === 0}
+                  isActive={i === activeIdx}
+                  isExhausted={exhaustedIndices.includes(i)}
                   onRemove={onRemove}
                 />
               ))}

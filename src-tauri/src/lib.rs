@@ -1,4 +1,7 @@
 mod claude_settings;
+mod codex_settings;
+mod hermes_settings;
+mod openclaw_settings;
 mod config;
 mod proxy;
 mod proxy_log;
@@ -100,6 +103,15 @@ pub fn run() {
             is_injected_cmd,
             get_proxy_logs_cmd,
             restart_proxy_cmd,
+            inject_codex_cmd,
+            remove_codex_cmd,
+            inject_hermes_cmd,
+            remove_hermes_cmd,
+            inject_openclaw_cmd,
+            remove_openclaw_cmd,
+            get_exhausted_indices_cmd,
+            get_active_idx_cmd,
+            reset_exhausted_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -192,5 +204,57 @@ async fn restart_proxy_cmd(
     // Replace the shutdown sender so future restarts work
     inner.shutdown_tx = new_shutdown_tx;
 
+    Ok(())
+}
+
+#[tauri::command]
+fn inject_codex_cmd(provider: config::Provider) -> Result<(), String> {
+    codex_settings::inject(&provider).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn remove_codex_cmd() -> Result<(), String> {
+    codex_settings::remove().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn inject_hermes_cmd(provider: config::Provider) -> Result<(), String> {
+    hermes_settings::inject(&provider).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn remove_hermes_cmd(provider_id: String) -> Result<(), String> {
+    hermes_settings::remove(&provider_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn inject_openclaw_cmd(provider: config::Provider) -> Result<(), String> {
+    openclaw_settings::inject(&provider).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn remove_openclaw_cmd(provider_id: String) -> Result<(), String> {
+    openclaw_settings::remove(&provider_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_exhausted_indices_cmd(
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<Vec<usize>, String> {
+    Ok(router.read().await.get_exhausted_indices())
+}
+
+#[tauri::command]
+async fn get_active_idx_cmd(
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<usize, String> {
+    Ok(router.read().await.active_idx)
+}
+
+#[tauri::command]
+async fn reset_exhausted_cmd(
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    router.write().await.reset_exhausted();
     Ok(())
 }

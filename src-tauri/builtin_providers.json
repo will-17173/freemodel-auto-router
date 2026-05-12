@@ -33,7 +33,7 @@
     "name": "美团 LongCat",
     "base_url": "https://api.longcat.chat/anthropic",
     "protocol": "Anthropic",
-    "auth_scheme": "ApiKey",
+    "auth_scheme": "Bearer",
     "models": [
       { "id": "LongCat-Flash-Chat", "name": "LongCat Flash Chat", "enabled": true },
       { "id": "LongCat-Flash-Thinking", "name": "LongCat Flash Thinking", "enabled": false },
