@@ -11,7 +11,7 @@ fn openclaw_config_path() -> PathBuf {
         .join("openclaw.json")
 }
 
-pub fn inject(provider: &Provider) -> Result<()> {
+pub fn inject(provider: &Provider, port: u16) -> Result<()> {
     let path = openclaw_config_path();
     fs::create_dir_all(path.parent().unwrap())?;
 
@@ -29,7 +29,7 @@ pub fn inject(provider: &Provider) -> Result<()> {
         .collect();
 
     let provider_entry = json!({
-        "baseUrl": provider.base_url,
+        "baseUrl": format!("http://localhost:{}/openai", port),
         "apiKey": provider.api_key,
         "models": models,
     });

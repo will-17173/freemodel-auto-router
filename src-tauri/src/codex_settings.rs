@@ -9,7 +9,7 @@ fn codex_dir() -> PathBuf {
         .join(".codex")
 }
 
-pub fn inject(provider: &Provider) -> Result<()> {
+pub fn inject(provider: &Provider, port: u16) -> Result<()> {
     let dir = codex_dir();
     fs::create_dir_all(&dir)?;
 
@@ -23,8 +23,8 @@ pub fn inject(provider: &Provider) -> Result<()> {
     // config.toml
     let model_id = "freemodel-auto";
     let config_content = format!(
-        "model = \"{}\"\n\n[provider]\nbase_url = \"{}\"\n",
-        model_id, provider.base_url
+        "model = \"{}\"\n\n[provider]\nbase_url = \"http://localhost:{}/openai\"\n",
+        model_id, port
     );
     let config_path = dir.join("config.toml");
     let config_tmp = config_path.with_extension("tmp");

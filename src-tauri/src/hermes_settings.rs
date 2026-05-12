@@ -10,7 +10,7 @@ fn hermes_config_path() -> PathBuf {
         .join("config.yaml")
 }
 
-pub fn inject(provider: &Provider) -> Result<()> {
+pub fn inject(provider: &Provider, port: u16) -> Result<()> {
     let path = hermes_config_path();
     fs::create_dir_all(path.parent().unwrap())?;
 
@@ -36,7 +36,7 @@ pub fn inject(provider: &Provider) -> Result<()> {
     );
     provider_entry.insert(
         serde_yaml::Value::String("base_url".into()),
-        serde_yaml::Value::String(provider.base_url.clone()),
+        serde_yaml::Value::String(format!("http://localhost:{}/openai", port)),
     );
     provider_entry.insert(
         serde_yaml::Value::String("api_key".into()),

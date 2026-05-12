@@ -209,8 +209,8 @@ async fn restart_proxy_cmd(
 }
 
 #[tauri::command]
-fn inject_codex_cmd(provider: config::Provider) -> Result<(), String> {
-    codex_settings::inject(&provider).map_err(|e| e.to_string())
+fn inject_codex_cmd(provider: config::Provider, port: u16) -> Result<(), String> {
+    codex_settings::inject(&provider, port).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -219,8 +219,8 @@ fn remove_codex_cmd() -> Result<(), String> {
 }
 
 #[tauri::command]
-fn inject_hermes_cmd(provider: config::Provider) -> Result<(), String> {
-    hermes_settings::inject(&provider).map_err(|e| e.to_string())
+fn inject_hermes_cmd(provider: config::Provider, port: u16) -> Result<(), String> {
+    hermes_settings::inject(&provider, port).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -234,8 +234,8 @@ fn is_hermes_injected_cmd(provider_id: String) -> bool {
 }
 
 #[tauri::command]
-fn inject_openclaw_cmd(provider: config::Provider) -> Result<(), String> {
-    openclaw_settings::inject(&provider).map_err(|e| e.to_string())
+fn inject_openclaw_cmd(provider: config::Provider, port: u16) -> Result<(), String> {
+    openclaw_settings::inject(&provider, port).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
