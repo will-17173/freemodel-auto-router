@@ -33,6 +33,15 @@ fn default_true() -> bool { true }
 pub struct Provider {
     pub id: String,
     pub name: String,
+    // 新字段
+    #[serde(default)]
+    pub anthropic_url: String,
+    #[serde(default)]
+    pub openai_url: String,
+    #[serde(default)]
+    pub dual_protocol: bool,
+    // 旧字段，迁移兼容（不再序列化输出）
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub base_url: String,
     pub protocol: Protocol,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -117,7 +126,21 @@ pub fn load_config() -> AppConfig {
     let path = config_path();
     if let Ok(s) = fs::read_to_string(&path) {
         match serde_json::from_str::<AppConfig>(&s) {
-            Ok(cfg) => cfg,
+            Ok(cfg) => {
+                // 迁移检查：如果有 base_url 但没有 anthropic_url
+                let needs_migration = cfg.providers.iter().any(|p| {
+                    !p.base_url.is_empty() && p.anthropic_url.is_empty()
+                });
+
+                if needs_migration {
+                    let migrated = migrate_config(&cfg);
+                    if let Err(e) = save_config(&migrated) {
+                        eprintln!("[config] migration save error: {e}");
+                    }
+                    return migrated;
+                }
+                cfg
+            }
             Err(e) => {
                 eprintln!("[config] parse error: {e}");
                 AppConfig::default()
@@ -125,6 +148,36 @@ pub fn load_config() -> AppConfig {
         }
     } else {
         AppConfig::default()
+    }
+}
+
+fn migrate_config(cfg: &AppConfig) -> AppConfig {
+    let migrated_providers = cfg.providers.iter().map(|p| {
+        if !p.base_url.is_empty() && p.anthropic_url.is_empty() {
+            Provider {
+                id: p.id.clone(),
+                name: p.name.clone(),
+                anthropic_url: p.base_url.clone(),
+                openai_url: p.base_url.clone(),
+                dual_protocol: true,
+                base_url: String::new(), // 清空旧字段
+                protocol: p.protocol.clone(),
+                auth_scheme: p.auth_scheme.clone(),
+                api_key: p.api_key.clone(),
+                models: p.models.clone(),
+                enabled: p.enabled,
+                priority: p.priority,
+            }
+        } else {
+            p.clone()
+        }
+    }).collect();
+
+    AppConfig {
+        providers: migrated_providers,
+        retry: cfg.retry.clone(),
+        queue: cfg.queue.clone(),
+        port: cfg.port,
     }
 }
 

@@ -122,7 +122,10 @@ mod tests {
         Provider {
             id: id.to_owned(),
             name: id.to_owned(),
-            base_url: "https://example.com/api".to_owned(),
+            anthropic_url: "https://example.com/api".to_owned(),
+            openai_url: "https://example.com/api".to_owned(),
+            dual_protocol: false,
+            base_url: String::new(),
             protocol: Protocol::Anthropic,
             auth_scheme: None,
             api_key: "token".to_owned(),
