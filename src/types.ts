@@ -13,7 +13,6 @@ export interface Provider {
   anthropic_url: string;
   openai_url: string;
   dual_protocol: boolean;
-  base_url?: string; // 旧字段，可选，用于迁移兼容
   protocol: Protocol;
   auth_scheme?: AuthScheme;
   api_key: string;
