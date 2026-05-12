@@ -5,9 +5,10 @@ interface Props {
   isActive: boolean;
   onAddToQueue: (providerId: string, modelId: string) => void;
   onConfigKey: (providerId: string) => void;
+  onAddModel: (providerId: string) => void;
 }
 
-export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: Props) {
+export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey, onAddModel }: Props) {
   const hasKey = provider.api_key.trim().length > 0;
 
   return (
@@ -128,6 +129,37 @@ export function ProviderCard({ provider, isActive, onAddToQueue, onConfigKey }: 
               )}
             </button>
           ))}
+          {/* Add model button */}
+          <button
+            onClick={() => onAddModel(provider.id)}
+            title="添加模型"
+            style={{
+              fontFamily: "var(--fm-font-sans)",
+              fontSize: "14px", fontWeight: 500,
+              borderRadius: "999px",
+              padding: "7px 14px 8px",
+              border: "1.5px dashed var(--fm-color-hairline)",
+              background: "transparent",
+              color: "var(--fm-ink-faint)",
+              cursor: "pointer",
+              display: "inline-flex", alignItems: "center", gap: "5px",
+              transition: "border-color 0.15s, color 0.15s, background 0.15s",
+            }}
+            onMouseEnter={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "#000000";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-color-ink)";
+              (e.currentTarget as HTMLButtonElement).style.background = "var(--fm-color-surface-soft)";
+            }}
+            onMouseLeave={(e) => {
+              (e.currentTarget as HTMLButtonElement).style.borderColor = "var(--fm-color-hairline)";
+              (e.currentTarget as HTMLButtonElement).style.color = "var(--fm-ink-faint)";
+              (e.currentTarget as HTMLButtonElement).style.background = "transparent";
+            }}
+          >
+            <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <path d="M8 2v12M2 8h12"/>
+            </svg>
+          </button>
           {provider.models.length === 0 && (
             <span style={{ fontSize: "15px", color: "var(--fm-ink-faint)", fontStyle: "italic" }}>暂无模型</span>
           )}

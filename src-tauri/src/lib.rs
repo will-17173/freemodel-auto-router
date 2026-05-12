@@ -107,6 +107,7 @@ pub fn run() {
             remove_codex_cmd,
             inject_hermes_cmd,
             remove_hermes_cmd,
+            is_hermes_injected_cmd,
             inject_openclaw_cmd,
             remove_openclaw_cmd,
             get_exhausted_indices_cmd,
@@ -225,6 +226,11 @@ fn inject_hermes_cmd(provider: config::Provider) -> Result<(), String> {
 #[tauri::command]
 fn remove_hermes_cmd(provider_id: String) -> Result<(), String> {
     hermes_settings::remove(&provider_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn is_hermes_injected_cmd(provider_id: String) -> bool {
+    hermes_settings::is_injected(&provider_id)
 }
 
 #[tauri::command]

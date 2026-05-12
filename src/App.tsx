@@ -10,7 +10,7 @@ import {
   isInjected,
   restartProxy,
   injectCodex, removeCodex,
-  injectHermes, removeHermes,
+  injectHermes, removeHermes, isHermesInjected,
   injectOpenclaw, removeOpenclaw,
   getExhaustedIndices,
   getActiveIdx,
@@ -22,6 +22,7 @@ import { SettingsModal } from "./components/SettingsModal";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { ProxyLogPanel } from "./components/ProxyLogPanel";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
+import { AddModelModal } from "./components/AddModelModal";
 import { AppToggle } from "./components/AppToggle";
 import type { AppConfig, Provider, QueueItem } from "./types";
 import hermesImg from "./assets/images/hermes.png";
@@ -57,6 +58,7 @@ export default function App() {
   const [showLogs, setShowLogs] = useState(false);
   const [showAddProvider, setShowAddProvider] = useState(false);
   const [editingKeyProviderId, setEditingKeyProviderId] = useState<string | null>(null);
+  const [addingModelProviderId, setAddingModelProviderId] = useState<string | null>(null);
   const [appStates, setAppStates] = useState({
     cc: false,
     codex: false,
@@ -166,6 +168,16 @@ updateActive(provider.api_key).catch(console.error);
     updateAndSave({ ...config!, providers });
   }
 
+  function addModel(providerId: string, modelId: string) {
+    const providers = config!.providers.map((p) =>
+      p.id !== providerId
+        ? p
+        : { ...p, models: [...p.models, { id: modelId, name: modelId, enabled: true }] }
+    );
+    updateAndSave({ ...config!, providers });
+    setAddingModelProviderId(null);
+  }
+
   function addProvider(input: AddProviderPayload) {
     const nextProvider: Provider = {
       id: createProviderId(input.name, config!.providers),
@@ -190,12 +202,24 @@ updateActive(provider.api_key).catch(console.error);
     ? config.providers.find((p) => p.id === editingKeyProviderId) ?? null
     : null;
 
+  const addingModelProvider = addingModelProviderId
+    ? config.providers.find((p) => p.id === addingModelProviderId) ?? null
+    : null;
+
   const activeQueueItem = config.queue[activeIdx];
   const activeProvider = activeQueueItem
     ? config.providers.find((p) => p.id === activeQueueItem.provider_id)
     : undefined;
   const activeModel = activeProvider?.models.find((m) => m.id === activeQueueItem?.model_id);
   const isActive = !!(activeProvider && activeModel);
+
+  // 初始化时检查 Hermes 配置状态
+  useEffect(() => {
+    if (!activeProvider) return;
+    isHermesInjected(activeProvider.id)
+      .then((v) => setAppStates(prev => ({ ...prev, hermes: v })))
+      .catch(console.error);
+  }, [activeProvider?.id]);
 
   return (
     <div style={{
@@ -298,12 +322,16 @@ await injectProxy(config.port, activeProvider!.api_key);
             disabled={!isActive}
             title={!isActive ? "队列为空，无法启用" : appStates.hermes ? "关闭 Hermes 注入" : "注入到 Hermes 配置"}
             onToggle={async () => {
-              if (appStates.hermes) {
-                await removeHermes(activeProvider!.id);
-                setAppStates(prev => ({ ...prev, hermes: false }));
-              } else {
-                await injectHermes(activeProvider!);
-                setAppStates(prev => ({ ...prev, hermes: true }));
+              try {
+                if (appStates.hermes) {
+                  await removeHermes(activeProvider!.id);
+                  setAppStates(prev => ({ ...prev, hermes: false }));
+                } else {
+                  await injectHermes(activeProvider!);
+                  setAppStates(prev => ({ ...prev, hermes: true }));
+                }
+              } catch (e) {
+                console.error("Hermes 配置操作失败:", e);
               }
             }}
           />
@@ -415,6 +443,7 @@ await injectProxy(config.port, activeProvider!.api_key);
             isActive={activeQueueItem?.provider_id === p.id}
             onAddToQueue={addToQueue}
             onConfigKey={(id) => setEditingKeyProviderId(id)}
+            onAddModel={(id) => setAddingModelProviderId(id)}
           />
         ))}
         <button
@@ -507,6 +536,17 @@ injectProxy(newPort, p.api_key).catch(console.error);
           currentKey={editingKeyProvider.api_key}
           onSave={(key) => saveApiKey(editingKeyProvider.id, key)}
           onClose={() => setEditingKeyProviderId(null)}
+        />
+      )}
+
+      {addingModelProvider && (
+        <AddModelModal
+          providerName={addingModelProvider.name}
+          existingModelIds={addingModelProvider.models.map((m) => m.id)}
+          onSave={(modelIds) => {
+            modelIds.forEach((modelId) => addModel(addingModelProvider.id, modelId));
+          }}
+          onClose={() => setAddingModelProviderId(null)}
         />
       )}
     </div>

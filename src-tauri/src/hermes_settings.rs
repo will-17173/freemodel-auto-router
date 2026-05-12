@@ -120,3 +120,39 @@ pub fn remove(provider_id: &str) -> Result<()> {
     fs::rename(&tmp, &path)?;
     Ok(())
 }
+
+/// Check if a custom provider with the given provider_id exists in Hermes config.yaml
+pub fn is_injected(provider_id: &str) -> bool {
+    let path = hermes_config_path();
+    if !path.exists() {
+        return false;
+    }
+
+    let content = match fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return false,
+    };
+
+    let doc: serde_yaml::Value = match serde_yaml::from_str(&content) {
+        Ok(d) => d,
+        Err(_) => return false,
+    };
+
+    let root = match doc.as_mapping() {
+        Some(m) => m,
+        None => return false,
+    };
+
+    let key = serde_yaml::Value::String("custom_providers".into());
+    if let Some(seq) = root.get(&key).and_then(|v| v.as_sequence()) {
+        let name_key = serde_yaml::Value::String("name".into());
+        let name_val = serde_yaml::Value::String(provider_id.to_string());
+        for e in seq {
+            if e.as_mapping().and_then(|m| m.get(&name_key)) == Some(&name_val) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
