@@ -11,6 +11,22 @@ use http_body_util::BodyExt;
 use std::sync::Arc;
 use tokio::sync::watch;
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum RoutePrefix {
+    Anthropic,
+    OpenAI,
+}
+
+fn parse_route_prefix(path: &str) -> Option<(RoutePrefix, &str)> {
+    if let Some(rest) = path.strip_prefix("/anthropic") {
+        Some((RoutePrefix::Anthropic, rest))
+    } else if let Some(rest) = path.strip_prefix("/openai") {
+        Some((RoutePrefix::OpenAI, rest))
+    } else {
+        None
+    }
+}
+
 #[derive(Clone)]
 pub struct ProxyState {
     pub router: SharedRouter,
@@ -75,6 +91,19 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         .unwrap_or_else(|| "/".to_owned());
     let original_headers = parts.headers.clone();
 
+    // 解析路径前缀
+    let (route_prefix, stripped_path) = match parse_route_prefix(&path) {
+        Some(result) => result,
+        None => {
+            return error_response(
+                StatusCode::BAD_REQUEST,
+                "path must start with /anthropic or /openai",
+            );
+        }
+    };
+    // 将 stripped_path 转为 owned String 以避免借用问题
+    let stripped_path = stripped_path.to_owned();
+
     log::debug!(
         "[proxy] inbound {} {} | has_auth={} has_xkey={} ct={:?}",
         method,
@@ -108,17 +137,39 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
     };
 
     loop {
-        let (base_url, api_key, protocol, auth_scheme, model_id, provider_name) = {
+        let (target_url, api_key, protocol, auth_scheme, model_id, provider_name) = {
             let r = state.router.read().await;
             match r.active_entry() {
-                Some((p, mid)) => (
-                    p.base_url.clone(),
-                    p.api_key.clone(),
-                    p.protocol.clone(),
-                    p.effective_auth_scheme(),
-                    mid.to_owned(),
-                    p.name.clone(),
-                ),
+                Some((p, mid)) => {
+                    let target_url = match route_prefix {
+                        RoutePrefix::Anthropic => {
+                            if p.anthropic_url.is_empty() {
+                                return error_response(
+                                    StatusCode::SERVICE_UNAVAILABLE,
+                                    "provider has no anthropic_url configured",
+                                );
+                            }
+                            p.anthropic_url.clone()
+                        }
+                        RoutePrefix::OpenAI => {
+                            if p.openai_url.is_empty() {
+                                return error_response(
+                                    StatusCode::SERVICE_UNAVAILABLE,
+                                    "provider has no openai_url configured",
+                                );
+                            }
+                            p.openai_url.clone()
+                        }
+                    };
+                    (
+                        target_url,
+                        p.api_key.clone(),
+                        p.protocol.clone(),
+                        p.effective_auth_scheme(),
+                        mid.to_owned(),
+                        p.name.clone(),
+                    )
+                }
                 None => {
                     return error_response(
                         StatusCode::SERVICE_UNAVAILABLE,
@@ -131,7 +182,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         // Rewrite the "model" field in the request body to match the queue item
         let final_body = rewrite_model_field(&body_bytes, &model_id);
 
-        let url = format!("{}{}", base_url.trim_end_matches('/'), path);
+        let url = format!("{}{}", target_url.trim_end_matches('/'), stripped_path);
         let reqwest_method = reqwest::Method::from_bytes(method.as_str().as_bytes())
             .unwrap_or(reqwest::Method::POST);
 
@@ -140,11 +191,12 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             .request(reqwest_method, &url)
             .body(final_body);
 
-        req_builder = req_builder.headers(build_upstream_headers(
+        req_builder = req_builder.headers(build_upstream_headers_for_route(
             &original_headers,
+            route_prefix,
             &auth_scheme,
             &api_key,
-            &path,
+            &stripped_path,
         ));
 
         log::debug!(
@@ -342,6 +394,53 @@ fn build_upstream_headers(
 
     if is_anthropic_messages_path(path) && !headers.contains_key("anthropic-version") {
         headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+    }
+
+    headers
+}
+
+fn build_upstream_headers_for_route(
+    original_headers: &HeaderMap,
+    route_prefix: RoutePrefix,
+    auth_scheme: &AuthScheme,
+    api_key: &str,
+    stripped_path: &str,
+) -> HeaderMap {
+    let mut headers = HeaderMap::new();
+
+    for (key, value) in original_headers.iter() {
+        if should_forward_request_header(key.as_str()) {
+            headers.insert(key.clone(), value.clone());
+        }
+    }
+
+    match route_prefix {
+        RoutePrefix::Anthropic => {
+            // Anthropic 路径：按 auth_scheme 处理认证
+            match auth_scheme {
+                AuthScheme::Bearer => {
+                    if let Ok(value) = HeaderValue::from_str(&format!("Bearer {}", api_key)) {
+                        headers.insert("authorization", value);
+                    }
+                }
+                AuthScheme::ApiKey => {
+                    if let Ok(value) = HeaderValue::from_str(api_key) {
+                        headers.insert("x-api-key", value);
+                    }
+                }
+            }
+            // 添加 anthropic-version（如果是 messages 路径）
+            if is_anthropic_messages_path(stripped_path) && !headers.contains_key("anthropic-version") {
+                headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
+            }
+        }
+        RoutePrefix::OpenAI => {
+            // OpenAI 路径：固定 Bearer 认证
+            if let Ok(value) = HeaderValue::from_str(&format!("Bearer {}", api_key)) {
+                headers.insert("authorization", value);
+            }
+            // 不添加 anthropic-version
+        }
     }
 
     headers
