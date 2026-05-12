@@ -1,0 +1,47 @@
+[
+  {
+    "id": "openrouter",
+    "name": "OpenRouter",
+    "base_url": "https://openrouter.ai/api",
+    "protocol": "Anthropic",
+    "auth_scheme": "Bearer",
+    "models": [
+      { "id": "nvidia/nemotron-3-super", "name": "NVIDIA: Nemotron 3 Super", "enabled": true },
+      { "id": "poolside/laguna-m.1", "name": "Poolside: Laguna M.1", "enabled": false },
+      { "id": "inclusionai/ring-2.6-1t", "name": "inclusionAI: Ring-2.6-1T", "enabled": false },
+      { "id": "openai/gpt-oss-120b", "name": "OpenAI: gpt-oss-120b", "enabled": false },
+      { "id": "z-ai/glm-4.5-air", "name": "Z.ai: GLM 4.5 Air", "enabled": false },
+      { "id": "minimax/minimax-m2.5", "name": "MiniMax: MiniMax M2.5", "enabled": false },
+      { "id": "nvidia/nemotron-3-nano-30b-a3b", "name": "NVIDIA: Nemotron 3 Nano 30B A3B", "enabled": false },
+      { "id": "poolside/laguna-xs.2", "name": "Poolside: Laguna XS.2", "enabled": false },
+      { "id": "openai/gpt-oss-20b", "name": "OpenAI: gpt-oss-20b", "enabled": false },
+      { "id": "nvidia/nemotron-3-nano-omni", "name": "NVIDIA: Nemotron 3 Nano Omni", "enabled": false },
+      { "id": "google/gemma-4-31b", "name": "Google: Gemma 4 31B", "enabled": false },
+      { "id": "nvidia/nemotron-nano-12b-2-vl", "name": "NVIDIA: Nemotron Nano 12B 2 VL", "enabled": false },
+      { "id": "nvidia/nemotron-nano-9b-v2", "name": "NVIDIA: Nemotron Nano 9B V2", "enabled": false },
+      { "id": "baidu/cobuddy", "name": "Baidu Qianfan: CoBuddy", "enabled": false },
+      { "id": "google/gemma-4-26b-a4b", "name": "Google: Gemma 4 26B A4B", "enabled": false },
+      { "id": "qwen/qwen3-coder-480b-a35b", "name": "Qwen: Qwen3 Coder 480B A35B", "enabled": false },
+      { "id": "nvidia/llama-nemotron-embed-vl-1b-v2", "name": "NVIDIA: Llama Nemotron Embed VL 1B V2", "enabled": false },
+      { "id": "qwen/qwen3-next-80b-a3b-instruct", "name": "Qwen: Qwen3 Next 80B A3B Instruct", "enabled": false }
+    ],
+    "enabled": true,
+    "priority": 100
+  },
+  {
+    "id": "longcat",
+    "name": "美团 LongCat",
+    "base_url": "https://api.longcat.chat/anthropic",
+    "protocol": "Anthropic",
+    "auth_scheme": "ApiKey",
+    "models": [
+      { "id": "LongCat-Flash-Chat", "name": "LongCat Flash Chat", "enabled": true },
+      { "id": "LongCat-Flash-Thinking", "name": "LongCat Flash Thinking", "enabled": false },
+      { "id": "LongCat-Flash-Thinking-2601", "name": "LongCat Flash Thinking 2601", "enabled": false },
+      { "id": "LongCat-Flash-Lite", "name": "LongCat Flash Lite", "enabled": false },
+      { "id": "LongCat-2.0-Preview", "name": "LongCat 2.0 Preview", "enabled": false }
+    ],
+    "enabled": true,
+    "priority": 90
+  }
+]

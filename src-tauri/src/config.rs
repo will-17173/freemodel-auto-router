@@ -37,6 +37,7 @@ pub struct Provider {
     pub protocol: Protocol,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_scheme: Option<AuthScheme>,
+    #[serde(default)]
     pub api_key: String,
     pub models: Vec<Model>,
     #[serde(default = "default_true")]
@@ -86,25 +87,18 @@ pub struct AppConfig {
     pub port: u16,
 }
 
+const BUILTIN_PROVIDERS_JSON: &str = include_str!("../builtin_providers.json");
+
+fn load_builtin_providers() -> Vec<Provider> {
+    serde_json::from_str(BUILTIN_PROVIDERS_JSON)
+        .expect("builtin_providers.json should be valid JSON")
+}
+
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             port: default_port(),
-            providers: vec![Provider {
-                id: "openrouter".to_owned(),
-                name: "OpenRouter".to_owned(),
-                base_url: "https://openrouter.ai/api".to_owned(),
-                protocol: Protocol::Anthropic,
-                auth_scheme: Some(AuthScheme::Bearer),
-                api_key: String::new(),
-                models: vec![Model {
-                    id: "baidu/cobuddy:free".to_owned(),
-                    name: "Baidu Cobuddy (Free)".to_owned(),
-                    enabled: true,
-                }],
-                enabled: true,
-                priority: 100,
-            }],
+            providers: load_builtin_providers(),
             retry: RetryConfig::default(),
             queue: vec![],
         }
