@@ -25,6 +25,8 @@ pub struct Model {
     pub name: String,
     #[serde(default = "default_true")]
     pub enabled: bool,
+    #[serde(default)]
+    pub is_custom: bool,
 }
 
 fn default_true() -> bool { true }
@@ -47,6 +49,8 @@ pub struct Provider {
     #[serde(default = "default_true")]
     pub enabled: bool,
     pub priority: u32,
+    #[serde(default)]
+    pub is_custom: bool,
 }
 
 impl Provider {

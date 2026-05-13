@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { X, GripVertical } from "lucide-react"
+import { X, GripVertical, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { QueueItem, Provider, QueueStateInfo, Queue } from "@/types"
 import {
@@ -30,6 +30,7 @@ interface QueuePageProps {
   onReorder: (queueId: string, items: QueueItem[]) => void
   onRemove: (queueId: string, index: number) => void
   onResetExhausted: (queueId: string) => void
+  onSetDefault: (queueId: string) => void
 }
 
 function SortableQueueItem({
@@ -98,6 +99,7 @@ export function QueuePage({
   onReorder,
   onRemove,
   onResetExhausted,
+  onSetDefault,
 }: QueuePageProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -145,17 +147,32 @@ export function QueuePage({
           const exhaustedCount = state?.exhausted_indices.length ?? 0
 
           return (
-            <button
+            <div
               key={queue.id}
-              onClick={() => onSelectQueue(queue.id)}
               className={cn(
-                "flex items-center gap-1.5 px-2 py-2 rounded-lg text-sm transition-colors w-full text-left",
+                "flex items-center gap-1 px-2 py-2 rounded-lg text-sm transition-colors",
                 isSelected
                   ? "bg-primary/10 text-primary font-medium border border-primary/20"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <span className="truncate flex-1">{queue.name}</span>
+              <span
+                className="truncate flex-1 cursor-pointer"
+                onClick={() => onSelectQueue(queue.id)}
+              >
+                {queue.name}
+              </span>
+              {!isDefault && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 shrink-0 hover:text-primary"
+                  onClick={() => onSetDefault(queue.id)}
+                  title="设为默认"
+                >
+                  <Check className="h-3 w-3" />
+                </Button>
+              )}
               {isDefault && (
                 <Badge variant="default" className="text-[10px] px-1 py-0 shrink-0">默</Badge>
               )}
@@ -167,7 +184,7 @@ export function QueuePage({
                   {exhaustedCount >= itemCount ? "尽" : itemCount}
                 </Badge>
               )}
-            </button>
+            </div>
           )
         })}
       </div>

@@ -43,8 +43,26 @@ function StatusBadge({ status }: { status: number | undefined }) {
   return <Badge variant="outline" className="text-[10px] px-1.5 py-0">{status}</Badge>
 }
 
+// 请求头详情展开组件
+function HeadersDetail({ headers }: { headers: Record<string, string> }) {
+  const entries = Object.entries(headers)
+  if (entries.length === 0) return <span className="text-muted-foreground">无请求头</span>
+
+  return (
+    <div className="bg-muted/50 rounded p-2 text-xs font-mono max-h-[200px] overflow-auto">
+      {entries.map(([key, value]) => (
+        <div key={key} className="flex gap-2 py-0.5">
+          <span className="text-muted-foreground shrink-0">{key}:</span>
+          <span className="break-all">{value}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export function LogsPage({ port: _port }: LogsPageProps) {
   const [logs, setLogs] = useState<ProxyLogEntry[]>([])
+  const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     getProxyLogs().then(setLogs).catch(console.error)
@@ -53,6 +71,18 @@ export function LogsPage({ port: _port }: LogsPageProps) {
     }, 2000)
     return () => clearInterval(interval)
   }, [])
+
+  const toggleExpand = (id: number) => {
+    setExpandedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) {
+        next.delete(id)
+      } else {
+        next.add(id)
+      }
+      return next
+    })
+  }
 
   // Show newest logs first
   const sortedLogs = [...logs].reverse()
@@ -78,34 +108,57 @@ export function LogsPage({ port: _port }: LogsPageProps) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedLogs.map((log) => (
-              <TableRow key={log.id} className={log.level === "error" ? "bg-destructive/5" : log.level === "warn" ? "bg-yellow-50/50 dark:bg-yellow-950/20" : undefined}>
-                <TableCell className="font-mono text-xs text-muted-foreground">
-                  {formatTime(log.timestamp_ms)}
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status={log.status} />
-                </TableCell>
-                <TableCell className="text-sm truncate max-w-[130px]">
-                  {log.provider ?? <span className="text-muted-foreground">-</span>}
-                </TableCell>
-                <TableCell className="text-sm font-mono text-xs truncate max-w-[180px]">
-                  {log.model ?? <span className="text-muted-foreground">-</span>}
-                </TableCell>
-                <TableCell className="font-mono text-xs text-right">
-                  {formatTokens(log.input_tokens)}
-                </TableCell>
-                <TableCell className="font-mono text-xs text-right">
-                  {formatTokens(log.output_tokens)}
-                </TableCell>
-                <TableCell className="font-mono text-xs text-right">
-                  {formatDuration(log.duration_ms)}
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate">
-                  {log.message}
-                </TableCell>
-              </TableRow>
-            ))}
+            {sortedLogs.map((log) => {
+              const isExpanded = expandedIds.has(log.id)
+              const hasHeaders = log.request_headers && Object.keys(log.request_headers).length > 0
+              return (
+                <>
+                  <TableRow
+                    key={log.id}
+                    className={`${log.level === "error" ? "bg-destructive/5" : log.level === "warn" ? "bg-yellow-50/50 dark:bg-yellow-950/20" : ""} ${hasHeaders ? "cursor-pointer hover:bg-muted/50" : ""}`}
+                    onClick={hasHeaders ? () => toggleExpand(log.id) : undefined}
+                  >
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {formatTime(log.timestamp_ms)}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={log.status} />
+                    </TableCell>
+                    <TableCell className="text-sm truncate max-w-[130px]">
+                      {log.provider ?? <span className="text-muted-foreground">-</span>}
+                    </TableCell>
+                    <TableCell className="text-sm font-mono text-xs truncate max-w-[180px]">
+                      {log.model ?? <span className="text-muted-foreground">-</span>}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-right">
+                      {formatTokens(log.input_tokens)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-right">
+                      {formatTokens(log.output_tokens)}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-right">
+                      {formatDuration(log.duration_ms)}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate flex items-center gap-1">
+                      {log.message}
+                      {hasHeaders && (
+                        <span className="text-xs text-blue-500 shrink-0">
+                          {isExpanded ? " ▼" : " ▶"}
+                        </span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {isExpanded && log.request_headers && (
+                    <TableRow key={`${log.id}-detail`} className="bg-muted/30">
+                      <TableCell colSpan={8} className="p-2">
+                        <div className="text-xs text-muted-foreground mb-1">请求头详情:</div>
+                        <HeadersDetail headers={log.request_headers} />
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
+              )
+            })}
             {sortedLogs.length === 0 && (
               <TableRow>
                 <TableCell colSpan={8} className="text-center text-muted-foreground py-12">

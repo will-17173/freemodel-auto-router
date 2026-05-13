@@ -22,8 +22,7 @@ function AppToggle({ id: _id, label, enabled, disabled, onToggle, iconUrl }: App
     )}>
       <div className={cn(
         "w-8 h-8 rounded-md flex items-center justify-center overflow-hidden",
-        enabled ? "bg-primary" : "bg-muted",
-        !iconUrl && (enabled ? "text-primary-foreground text-[10px] font-semibold" : "text-muted-foreground text-[10px] font-semibold")
+        !enabled && "bg-muted"
       )}>
         {iconUrl ? (
           <img src={iconUrl} alt={label} className="h-6 w-6 object-contain" />

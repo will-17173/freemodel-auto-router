@@ -41,6 +41,8 @@ export const createQueue = (name: string): Promise<Queue> => invoke("create_queu
 export const deleteQueue = (queueId: string): Promise<void> => invoke("delete_queue_cmd", { queueId });
 export const updateQueue = (queueId: string, name: string, items: QueueItem[]): Promise<void> =>
   invoke("update_queue_cmd", { queueId, name, items });
+export const setDefaultQueue = (queueId: string): Promise<void> =>
+  invoke("set_default_queue_cmd", { queueId });
 
 // App mapping API
 export const getAppMappings = (): Promise<AppMapping[]> => invoke("get_app_mappings_cmd");
@@ -55,3 +57,9 @@ export interface TestConnectionResult {
 }
 export const testProviderConnection = (providerId: string): Promise<TestConnectionResult> =>
   invoke("test_provider_connection_cmd", { providerId });
+
+// Provider and model management
+export const deleteProvider = (providerId: string): Promise<void> =>
+  invoke("delete_provider_cmd", { providerId });
+export const deleteModel = (providerId: string, modelId: string): Promise<void> =>
+  invoke("delete_model_cmd", { providerId, modelId });

@@ -129,8 +129,11 @@ pub fn run() {
             create_queue_cmd,
             delete_queue_cmd,
             update_queue_cmd,
+            delete_provider_cmd,
+            delete_model_cmd,
             get_app_mappings_cmd,
             update_app_mapping_cmd,
+            set_default_queue_cmd,
             get_auth_cmd,
             save_auth_cmd,
             has_auth_cmd,
@@ -613,6 +616,22 @@ fn get_app_mappings_cmd() -> Vec<config::AppMapping> {
 }
 
 #[tauri::command]
+async fn set_default_queue_cmd(
+    queue_id: String,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    // Update router state
+    router.write().await.default_queue_id = queue_id.clone();
+
+    // Save config
+    let mut cfg = config::load_config();
+    cfg.default_queue_id = queue_id;
+    config::save_config(&cfg).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn update_app_mapping_cmd(
     app_id: String,
     queue_id: String,
@@ -635,6 +654,91 @@ async fn update_app_mapping_cmd(
     router.write().await.app_mapping = cfg.app_mapping.clone();
 
     config::save_config(&cfg).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+// ===== 供应商和模型管理 =====
+
+const BUILTIN_PROVIDER_IDS: &[&str] = &["openrouter", "longcat"];
+
+fn is_builtin_provider(provider_id: &str) -> bool {
+    BUILTIN_PROVIDER_IDS.contains(&provider_id)
+}
+
+#[tauri::command]
+async fn delete_provider_cmd(
+    provider_id: String,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    // 内置供应商不可删除
+    if is_builtin_provider(&provider_id) {
+        return Err("内置供应商不可删除".to_string());
+    }
+
+    // 删除关联的 auth
+    auth::delete_api_key(&provider_id).map_err(|e| e.to_string())?;
+
+    // Update router state
+    {
+        let mut r = router.write().await;
+        r.providers.retain(|p| p.id != provider_id);
+        // 更新 auth_map
+        let auth_map = auth::load_auth();
+        r.update_auth(auth_map);
+    }
+
+    // Save config
+    let mut cfg = config::load_config();
+    cfg.providers.retain(|p| p.id != provider_id);
+    // 从所有队列中移除该供应商的项目
+    for queue in cfg.queues.values_mut() {
+        queue.items.retain(|item| item.provider_id != provider_id);
+    }
+    config::save_config(&cfg).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn delete_model_cmd(
+    provider_id: String,
+    model_id: String,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    // 内置供应商的内置模型不可删除
+    if is_builtin_provider(&provider_id) {
+        let cfg = config::load_config();
+        let provider = cfg.providers.iter().find(|p| p.id == provider_id);
+        if let Some(p) = provider {
+            let model = p.models.iter().find(|m| m.id == model_id);
+            // 如果模型没有 is_custom 标记，则不可删除
+            if let Some(m) = model {
+                if !m.is_custom {
+                    return Err("内置供应商的内置模型不可删除".to_string());
+                }
+            }
+        }
+    }
+
+    // Update router state
+    {
+        let mut r = router.write().await;
+        if let Some(provider) = r.providers.iter_mut().find(|p| p.id == provider_id) {
+            provider.models.retain(|m| m.id != model_id);
+        }
+    }
+
+    // Save config
+    let mut cfg = config::load_config();
+    if let Some(provider) = cfg.providers.iter_mut().find(|p| p.id == provider_id) {
+        provider.models.retain(|m| m.id != model_id);
+    }
+    // 从所有队列中移除该模型
+    for queue in cfg.queues.values_mut() {
+        queue.items.retain(|item| item.provider_id != provider_id || item.model_id != model_id);
+    }
+    config::save_config(&cfg).map_err(|e| e.to_string())?;
+
     Ok(())
 }
 

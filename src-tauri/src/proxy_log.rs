@@ -24,6 +24,7 @@ pub struct ProxyLogEntry {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub duration_ms: Option<u64>,
+    pub request_headers: Option<BTreeMap<String, String>>,
 }
 
 #[derive(Clone)]
@@ -54,6 +55,29 @@ impl ProxyLogStore {
         V: Into<String>,
         I: IntoIterator<Item = (K, V)>,
     {
+        self.push_with_headers(level, message, fields, None)
+    }
+
+    pub fn push_with_headers<K, V, I>(
+        &self,
+        level: LogLevel,
+        message: impl Into<String>,
+        fields: I,
+        request_headers: Option<BTreeMap<String, String>>,
+    ) where
+        K: Into<String>,
+        V: Into<String>,
+        I: IntoIterator<Item = (K, V)>,
+    {
+        let message_str = message.into();
+        // 过滤掉 inbound request、forwarding upstream 和 retrying current provider 日志
+        if message_str == "inbound request"
+            || message_str == "forwarding upstream"
+            || message_str == "retrying current provider"
+        {
+            return;
+        }
+
         let mut inner = self.inner.lock().unwrap();
         if inner.capacity == 0 {
             return;
@@ -63,11 +87,21 @@ impl ProxyLogStore {
             inner.entries.pop_front();
         }
 
+        // 对请求头进行敏感字段过滤
+        let sanitized_headers = request_headers.map(|h| {
+            h.into_iter()
+                .map(|(key, value)| {
+                    let sanitized_value = sanitize_field(&key, value);
+                    (key, sanitized_value)
+                })
+                .collect()
+        });
+
         let entry = ProxyLogEntry {
             id: inner.next_id,
             timestamp_ms: current_timestamp_ms(),
             level,
-            message: message.into(),
+            message: message_str,
             fields: fields
                 .into_iter()
                 .map(|(key, value)| {
@@ -82,6 +116,7 @@ impl ProxyLogStore {
             input_tokens: None,
             output_tokens: None,
             duration_ms: None,
+            request_headers: sanitized_headers,
         };
         inner.next_id += 1;
         inner.entries.push_back(entry);
@@ -98,11 +133,21 @@ impl ProxyLogStore {
         input_tokens: Option<u64>,
         output_tokens: Option<u64>,
         duration_ms: Option<u64>,
+        request_headers: Option<BTreeMap<String, String>>,
     ) where
         K: Into<String>,
         V: Into<String>,
         I: IntoIterator<Item = (K, V)>,
     {
+        let message_str = message.into();
+        // 过滤掉 inbound request、forwarding upstream 和 retrying current provider 日志
+        if message_str == "inbound request"
+            || message_str == "forwarding upstream"
+            || message_str == "retrying current provider"
+        {
+            return;
+        }
+
         let mut inner = self.inner.lock().unwrap();
         if inner.capacity == 0 {
             return;
@@ -110,11 +155,22 @@ impl ProxyLogStore {
         while inner.entries.len() >= inner.capacity {
             inner.entries.pop_front();
         }
+
+        // 对请求头进行敏感字段过滤
+        let sanitized_headers = request_headers.map(|h| {
+            h.into_iter()
+                .map(|(key, value)| {
+                    let sanitized_value = sanitize_field(&key, value);
+                    (key, sanitized_value)
+                })
+                .collect()
+        });
+
         let entry = ProxyLogEntry {
             id: inner.next_id,
             timestamp_ms: current_timestamp_ms(),
             level,
-            message: message.into(),
+            message: message_str,
             fields: fields
                 .into_iter()
                 .map(|(key, value)| {
@@ -129,6 +185,7 @@ impl ProxyLogStore {
             input_tokens,
             output_tokens,
             duration_ms,
+            request_headers: sanitized_headers,
         };
         inner.next_id += 1;
         inner.entries.push_back(entry);

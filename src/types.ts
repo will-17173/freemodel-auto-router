@@ -5,6 +5,7 @@ export interface Model {
   id: string;
   name: string;
   enabled: boolean;
+  is_custom?: boolean;
 }
 
 export interface Provider {
@@ -18,6 +19,7 @@ export interface Provider {
   models: Model[];
   enabled: boolean;
   priority: number;
+  is_custom?: boolean;
 }
 
 export interface RetryConfig {
@@ -81,6 +83,7 @@ export interface ProxyLogEntry {
   input_tokens?: number;
   output_tokens?: number;
   duration_ms?: number;
+  request_headers?: Record<string, string>;
 }
 
 export interface ProviderSwitchedPayload {

@@ -110,6 +110,12 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         r.identify_queue(&original_headers, &stripped_path)
     };
 
+    // 构建请求头的 BTreeMap 用于日志记录
+    let inbound_headers_map: std::collections::BTreeMap<String, String> = original_headers
+        .iter()
+        .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("[binary]").to_string()))
+        .collect();
+
     log::debug!(
         "[proxy] inbound {} {} | queue_id={} has_auth={}",
         method,
@@ -117,7 +123,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         queue_id,
         original_headers.contains_key("authorization"),
     );
-    state.logs.push(
+    state.logs.push_with_headers(
         LogLevel::Info,
         "inbound request",
         [
@@ -125,6 +131,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             ("path", path.clone()),
             ("queue_id", queue_id.clone()),
         ],
+        Some(inbound_headers_map.clone()),
     );
 
     let retry_delay = {
@@ -241,6 +248,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                     input_tokens,
                     output_tokens,
                     Some(duration_ms),
+                    Some(inbound_headers_map.clone()),
                 );
                 if is_retryable_error(status) {
                     let failure_action = {

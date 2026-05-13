@@ -1,19 +1,38 @@
-import { Plus } from "lucide-react"
+import React from "react"
+import { Plus, Trash2, Zap, Loader2, Check, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DraftQueuePanel } from "./DraftQueuePanel"
-import type { Provider, Queue, DraftItem } from "@/types"
+import { testProviderConnection, type TestConnectionResult } from "@/api"
+import type { Provider, DraftItem } from "@/types"
+
+// 测试状态类型
+type TestStatus = "idle" | "testing" | "success" | "error"
+
+// 内置供应商 ID，这些不可删除
+const BUILTIN_PROVIDER_IDS = ["openrouter", "longcat"]
+
+// 判断供应商是否可删除
+function canDeleteProvider(provider: Provider): boolean {
+  if (provider.is_custom) return true
+  return !BUILTIN_PROVIDER_IDS.includes(provider.id)
+}
+
+// 判断模型是否可删除（自定义供应商的模型都可删除，或者有 is_custom 标记的）
+function canDeleteModel(provider: Provider, model: { id: string; is_custom?: boolean }): boolean {
+  if (model.is_custom) return true
+  if (canDeleteProvider(provider)) return true  // 自定义供应商的所有模型都可删除
+  return false
+}
 
 interface ProvidersPageProps {
   providers: Provider[]
   authMap: Record<string, boolean>
-  activeProviderId: string | undefined
-  queues: Record<string, Queue>
-  selectedQueueId: string | null
   onAddToQueue: (providerId: string, modelId: string) => void
   onConfigKey: (providerId: string) => void
   onAddModel: (providerId: string) => void
   onAddProvider: () => void
-  onSelectQueue: (queueId: string) => void
+  onDeleteProvider: (providerId: string) => void
+  onDeleteModel: (providerId: string, modelId: string) => void
   showDraftPanel: boolean
   draftQueueName: string
   draftItems: DraftItem[]
@@ -30,14 +49,12 @@ interface ProvidersPageProps {
 export function ProvidersPage({
   providers,
   authMap,
-  activeProviderId,
-  queues,
-  selectedQueueId,
   onAddToQueue,
   onConfigKey,
   onAddModel,
   onAddProvider,
-  onSelectQueue,
+  onDeleteProvider,
+  onDeleteModel,
   showDraftPanel,
   draftQueueName,
   draftItems,
@@ -50,6 +67,29 @@ export function ProvidersPage({
   onCancelDraftPanel,
   onSaveDraftQueue,
 }: ProvidersPageProps) {
+  // 测试连接状态管理
+  const [testStates, setTestStates] = React.useState<Record<string, { status: TestStatus; result: TestConnectionResult | null }>>({})
+
+  const handleTest = async (providerId: string) => {
+    if (!authMap[providerId]) return
+    setTestStates(prev => ({
+      ...prev,
+      [providerId]: { status: "testing", result: null }
+    }))
+    try {
+      const result = await testProviderConnection(providerId)
+      setTestStates(prev => ({
+        ...prev,
+        [providerId]: { status: result.success ? "success" : "error", result }
+      }))
+    } catch (e) {
+      setTestStates(prev => ({
+        ...prev,
+        [providerId]: { status: "error", result: { success: false, message: String(e), latency_ms: null } }
+      }))
+    }
+  }
+
   return (
     <div className="flex-1 flex overflow-hidden">
       {/* Main content */}
@@ -61,19 +101,9 @@ export function ProvidersPage({
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold">供应商</h1>
         <div className="flex items-center gap-2">
-          {/* Queue selector */}
-          <select
-            value={selectedQueueId ?? ""}
-            onChange={(e) => onSelectQueue(e.target.value)}
-            className="text-sm px-3 py-1.5 rounded-lg border border-border bg-background text-foreground"
-          >
-            {Object.values(queues).map((q) => (
-              <option key={q.id} value={q.id}>{q.name}</option>
-            ))}
-          </select>
           <button
             onClick={onOpenDraftPanel}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border text-muted-foreground text-sm rounded-lg hover:border-primary hover:text-primary transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-border text-muted-foreground text-sm rounded-lg hover:border-primary hover:text-primary transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             新建队列
@@ -83,7 +113,7 @@ export function ProvidersPage({
             className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
-            添加
+            添加供应商
           </button>
         </div>
       </div>
@@ -95,47 +125,104 @@ export function ProvidersPage({
             key={provider.id}
             className={cn(
               "bg-card rounded-xl border p-5 transition-all",
-              activeProviderId === provider.id
-                ? "border-primary shadow-[0_0_0_3px_rgba(255,85,0,0.12)]"
+              authMap[provider.id]
+                ? "border-primary/30 shadow-sm hover:border-primary/50 hover:shadow-md"
                 : "border-border shadow-sm hover:border-primary/40 hover:shadow-md"
             )}
           >
             {/* Card header */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                {activeProviderId === provider.id && (
+                {authMap[provider.id] && (
                   <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
                 )}
                 <span className="font-semibold text-sm text-foreground">{provider.name}</span>
               </div>
-              <button
-                className={cn(
-                  "text-xs px-2.5 py-1 rounded-full border transition-colors",
-                  authMap[provider.id]
-                    ? "border-border text-muted-foreground bg-muted hover:border-primary hover:text-primary"
-                    : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+              <div className="flex items-center gap-2">
+                {/* 测试连接按钮 */}
+                <button
+                  onClick={() => handleTest(provider.id)}
+                  disabled={!authMap[provider.id] || testStates[provider.id]?.status === "testing"}
+                  title={!authMap[provider.id] ? "请先配置 API Key" : "测试连接"}
+                  className={cn(
+                    "flex items-center justify-center w-7 h-7 rounded-full border transition-colors",
+                    testStates[provider.id]?.status === "success"
+                      ? "border-green-500/50 bg-green-500/10 text-green-600"
+                      : testStates[provider.id]?.status === "error"
+                        ? "border-red-500/50 bg-red-500/10 text-red-500"
+                        : "border-border bg-muted/50 text-muted-foreground hover:border-primary hover:text-primary",
+                    !authMap[provider.id] && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {testStates[provider.id]?.status === "testing" ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : testStates[provider.id]?.status === "success" ? (
+                    <Check className="h-3.5 w-3.5" />
+                  ) : testStates[provider.id]?.status === "error" ? (
+                    <X className="h-3.5 w-3.5" />
+                  ) : (
+                    <Zap className="h-3.5 w-3.5" />
+                  )}
+                </button>
+                {/* 延迟显示 */}
+                {testStates[provider.id]?.result?.latency_ms && (
+                  <span className="text-xs font-mono text-muted-foreground">
+                    {testStates[provider.id]?.result?.latency_ms}ms
+                  </span>
                 )}
-                onClick={() => onConfigKey(provider.id)}
-              >
-                {authMap[provider.id] ? "✓ Key" : "配置 Key"}
-              </button>
+                {canDeleteProvider(provider) && (
+                  <button
+                    className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      console.log("onDeleteProvider clicked:", provider.id);
+                      onDeleteProvider(provider.id);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button
+                  className={cn(
+                    "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                    authMap[provider.id]
+                      ? "border-primary/40 text-primary bg-primary/10 hover:border-primary hover:bg-primary/20"
+                      : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                  )}
+                  onClick={() => onConfigKey(provider.id)}
+                >
+                  {authMap[provider.id] ? "✓ Key" : "配置 Key"}
+                </button>
+              </div>
             </div>
             {/* Models */}
             <div className="flex flex-wrap gap-1.5">
               {provider.models.map((model) => (
-                <button
-                  key={model.id}
-                  disabled={!authMap[provider.id]}
-                  onClick={() => authMap[provider.id] && onAddToQueue(provider.id, model.id)}
-                  className={cn(
-                    "text-xs px-2.5 py-1 rounded-full border transition-colors",
-                    authMap[provider.id]
-                      ? "border-border text-foreground bg-muted/50 hover:border-primary hover:text-primary hover:bg-orange-50 cursor-pointer"
-                      : "border-border text-muted-foreground bg-muted/30 cursor-not-allowed opacity-60"
-                  )}
-                >
-                  {model.name} +
-                </button>
+                <div key={model.id} className="flex items-center gap-1">
+                  <button
+                    disabled={!authMap[provider.id] || !showDraftPanel}
+                    onClick={() => authMap[provider.id] && showDraftPanel && onAddToQueue(provider.id, model.id)}
+                    className={cn(
+                      "text-xs px-2.5 py-1 rounded-full border transition-colors inline-flex items-center gap-1",
+                      authMap[provider.id]
+                        ? showDraftPanel
+                          ? "border-[#22c55e]/40 bg-[#f0fce8] text-[#16a34a] hover:border-[#22c55e] hover:bg-[#dcfce7] cursor-pointer"
+                          : "border-[#22c55e]/30 bg-[#f0fce8]/70 text-[#16a34a]/80 cursor-not-allowed"
+                        : "border-border text-muted-foreground bg-muted/30 cursor-not-allowed opacity-60"
+                    )}
+                  >
+                    <span>{model.name}</span>
+                    {canDeleteModel(provider, model) && (
+                      <Trash2
+                        className="h-3 w-3 opacity-50 hover:opacity-100 hover:text-destructive transition-opacity cursor-pointer"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDeleteModel(provider.id, model.id);
+                        }}
+                      />
+                    )}
+                  </button>
+                </div>
               ))}
               <button
                 className="text-xs px-2.5 py-1 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
@@ -146,14 +233,6 @@ export function ProvidersPage({
             </div>
           </div>
         ))}
-
-        {/* Add provider placeholder */}
-        <button
-          onClick={onAddProvider}
-          className="h-[120px] border border-dashed border-border rounded-xl flex items-center justify-center text-sm text-muted-foreground hover:border-primary hover:bg-secondary transition-colors"
-        >
-          + 添加供应商
-        </button>
       </div>
 
       </div>
