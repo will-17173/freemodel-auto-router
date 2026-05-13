@@ -22,6 +22,12 @@ struct ProxyHandleInner {
 
 struct ProxyHandle(Arc<Mutex<ProxyHandleInner>>);
 
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProviderSwitchedPayload {
+    pub queue_id: String,
+    pub provider_name: String,
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let cfg = config::load_config();
@@ -56,10 +62,16 @@ pub fn run() {
             let app_handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {
                 while notify_rx.changed().await.is_ok() {
-                    let name = notify_rx.borrow().clone();
-                    if !name.is_empty() {
-                        use tauri::Emitter;
-                        let _ = app_handle.emit("provider-switched", &name);
+                    let payload_str = notify_rx.borrow().clone();
+                    if !payload_str.is_empty() {
+                        if let Ok(json) = serde_json::from_str::<serde_json::Value>(&payload_str) {
+                            let event_payload = ProviderSwitchedPayload {
+                                queue_id: json["queue_id"].as_str().unwrap_or("default").to_string(),
+                                provider_name: json["provider_name"].as_str().unwrap_or("").to_string(),
+                            };
+                            use tauri::Emitter;
+                            let _ = app_handle.emit("provider-switched", &event_payload);
+                        }
                     }
                 }
             });
