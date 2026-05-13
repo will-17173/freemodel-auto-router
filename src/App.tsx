@@ -2,30 +2,22 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { sendNotification } from "@tauri-apps/plugin-notification";
 import {
-  getConfig,
-  saveConfig,
-  injectProxy,
-  updateActive,
-  restoreBackup,
-  isInjected,
-  restartProxy,
-  injectCodex, removeCodex,
-  injectHermes, removeHermes, isHermesInjected,
+  getConfig, saveConfig, injectProxy, updateActive, restoreBackup, isInjected, restartProxy,
+  injectCodex, removeCodex, injectHermes, removeHermes, isHermesInjected,
   injectOpenclaw, removeOpenclaw,
-  getExhaustedIndices,
-  getActiveIdx,
-  resetExhausted,
+  getQueueStates, resetQueueExhausted, createQueue, deleteQueue,
   getAuth, saveAuth, getAllAuth,
 } from "./api";
 import { ProviderCard } from "./components/ProviderCard";
-import { QueuePanel } from "./components/QueuePanel";
+import { QueueManagerPanel } from "./components/QueueManagerPanel";
+import { QueueDetailPanel } from "./components/QueueDetailPanel";
 import { SettingsModal } from "./components/SettingsModal";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { ProxyLogPanel } from "./components/ProxyLogPanel";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
 import { AppToggle } from "./components/AppToggle";
-import type { AppConfig, Provider, QueueItem } from "./types";
+import type { AppConfig, Provider, QueueItem, QueueStateInfo, ProviderSwitchedPayload } from "./types";
 import hermesImg from "./assets/images/hermes.png";
 import openclawImg from "./assets/images/openclaw.png";
 import "./App.css";
@@ -67,8 +59,8 @@ export default function App() {
     hermes: false,
     openclaw: false,
   });
-  const [exhaustedIndices, setExhaustedIndices] = useState<number[]>([]);
-  const [activeIdx, setActiveIdx] = useState<number>(0);
+  const [queueStates, setQueueStates] = useState<Record<string, QueueStateInfo>>({});
+  const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
   useEffect(() => {
     getConfig().then(setConfig);
@@ -80,46 +72,42 @@ export default function App() {
   }, [config?.port]);
 
   useEffect(() => {
-    const unlisten = listen<string>("provider-switched", (e) => {
+    const unlisten = listen<ProviderSwitchedPayload>("provider-switched", (e) => {
       sendNotification({
         title: "freemodel router",
-        body: `已切换到 ${e.payload}`,
+        body: `队列 ${e.payload.queue_id} 已切换到 ${e.payload.provider_name}`,
       });
-      // 更新用尽状态和活跃索引
-      getExhaustedIndices().then(setExhaustedIndices).catch(console.error);
-      getActiveIdx().then(setActiveIdx).catch(console.error);
+      getQueueStates().then(setQueueStates).catch(console.error);
     });
     return () => { unlisten.then(f => f()); };
   }, []);
 
-  // 定期轮询用尽状态（每 5 秒）
+  // Poll queue states every 5 seconds
   useEffect(() => {
-    if (!config || config.queue.length === 0) return;
+    if (!config) return;
     const interval = setInterval(() => {
-      getExhaustedIndices().then(setExhaustedIndices).catch(console.error);
-      getActiveIdx().then(setActiveIdx).catch(console.error);
+      getQueueStates().then(setQueueStates).catch(console.error);
     }, 5000);
     return () => clearInterval(interval);
-  }, [config?.queue.length]);
+  }, [config]);
 
-  // 初始加载用尽状态
+  // Load queue states on config load
   useEffect(() => {
-    if (!config || config.queue.length === 0) return;
-    getExhaustedIndices().then(setExhaustedIndices).catch(console.error);
-    getActiveIdx().then(setActiveIdx).catch(console.error);
-  }, [config?.queue]);
+    if (!config) return;
+    getQueueStates().then(setQueueStates).catch(console.error);
+    setSelectedQueueId(config.default_queue_id);
+  }, [config?.default_queue_id]);
 
   // 当代理已注入且队列首项（provider key 或 model）发生变化时，
-// 同步刷新 settings.json 里的 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL。
-useEffect(() => {
+  // 同步刷新 settings.json 里的 ANTHROPIC_AUTH_TOKEN / ANTHROPIC_MODEL。
+  useEffect(() => {
     if (!appStates.cc || !config) return;
-    const head = config.queue[0];
+    const defaultQueue = config.queues[config.default_queue_id];
+    const head = defaultQueue?.items[0];
     if (!head) return;
     const provider = config.providers.find((p) => p.id === head.provider_id);
     if (!provider) return;
-    // 从 authMap 检查是否有 key
     if (!authMap[provider.id]) return;
-    // 获取实际的 api_key
     getAuth(provider.id).then((key) => {
       if (key && key.trim().length > 0) {
         updateActive(key).catch(console.error);
@@ -127,15 +115,18 @@ useEffect(() => {
     }).catch(console.error);
   }, [
     appStates.cc,
-    config?.queue[0]?.provider_id,
-    config?.queue[0]?.model_id,
+    config?.queues?.[config?.default_queue_id ?? ""]?.items[0]?.provider_id,
+    config?.queues?.[config?.default_queue_id ?? ""]?.items[0]?.model_id,
     authMap,
   ]);
 
   // 初始化时检查 Hermes 配置状态（必须在所有早期 return 之前）
   useEffect(() => {
     if (!config) return;
-    const activeItem = config.queue[activeIdx];
+    const defaultQueue = config.queues[config.default_queue_id];
+    const defaultQueueState = queueStates[config.default_queue_id];
+    const activeIdx = defaultQueueState?.active_idx ?? 0;
+    const activeItem = defaultQueue?.items[activeIdx];
     const provider = activeItem
       ? config.providers.find((p) => p.id === activeItem.provider_id)
       : undefined;
@@ -143,7 +134,7 @@ useEffect(() => {
     isHermesInjected(provider.id)
       .then((v) => setAppStates(prev => ({ ...prev, hermes: v })))
       .catch(console.error);
-  }, [config, activeIdx]);
+  }, [config, queueStates]);
 
   if (!config) return (
     <div style={{ background: "var(--fm-color-canvas)", minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -157,18 +148,27 @@ useEffect(() => {
   function updateAndSave(next: AppConfig) {
     setConfig(next);
     saveConfig(next);
+    getQueueStates().then(setQueueStates).catch(console.error);
   }
 
   function addToQueue(providerId: string, modelId: string) {
     if (!authMap[providerId]) return;  // 需要 API key 才能添加
+    if (!selectedQueueId) return;
     const newItem: QueueItem = { provider_id: providerId, model_id: modelId };
-    updateAndSave({ ...config!, queue: [...config!.queue, newItem] });
+    const queue = config!.queues[selectedQueueId];
+    if (!queue) return;
+    const updatedQueue = { ...queue, items: [...queue.items, newItem] };
+    updateAndSave({ ...config!, queues: { ...config!.queues, [selectedQueueId]: updatedQueue } });
   }
 
-  function removeFromQueue(index: number) {
-    const queue = config!.queue.filter((_, i) => i !== index);
-    updateAndSave({ ...config!, queue });
-    if (queue.length === 0) {
+  function removeFromQueue(queueId: string, index: number) {
+    const queue = config!.queues[queueId];
+    if (!queue) return;
+    const newItems = queue.items.filter((_, i) => i !== index);
+    const updatedQueue = { ...queue, items: newItems };
+    updateAndSave({ ...config!, queues: { ...config!.queues, [queueId]: updatedQueue } });
+    // If default queue is now empty, turn off all injections
+    if (queueId === config!.default_queue_id && newItems.length === 0) {
       if (appStates.cc) { restoreBackup().catch(console.error); }
       if (appStates.codex) { removeCodex().catch(console.error); }
       if (appStates.hermes && activeProvider) { removeHermes(activeProvider.id).catch(console.error); }
@@ -177,8 +177,40 @@ useEffect(() => {
     }
   }
 
-  function reorderQueue(newQueue: QueueItem[]) {
-    updateAndSave({ ...config!, queue: newQueue });
+  function reorderQueue(queueId: string, newItems: QueueItem[]) {
+    const queue = config!.queues[queueId];
+    if (!queue) return;
+    const updatedQueue = { ...queue, items: newItems };
+    updateAndSave({ ...config!, queues: { ...config!.queues, [queueId]: updatedQueue } });
+  }
+
+  function handleCreateQueue(name: string) {
+    createQueue(name).then((newQueue) => {
+      setConfig(prev => prev ? {
+        ...prev,
+        queues: { ...prev.queues, [newQueue.id]: newQueue }
+      } : prev);
+      setSelectedQueueId(newQueue.id);
+      // Save already done by create_queue_cmd on backend
+    }).catch(console.error);
+  }
+
+  function handleDeleteQueue(queueId: string) {
+    deleteQueue(queueId).then(() => {
+      setConfig(prev => {
+        if (!prev) return prev;
+        const updatedQueues = { ...prev.queues };
+        delete updatedQueues[queueId];
+        return { ...prev, queues: updatedQueues };
+      });
+      setSelectedQueueId(prev => prev === queueId ? config!.default_queue_id : prev);
+    }).catch(console.error);
+  }
+
+  function handleResetQueueExhausted(queueId: string) {
+    resetQueueExhausted(queueId).then(() => {
+      getQueueStates().then(setQueueStates).catch(console.error);
+    }).catch(console.error);
   }
 
   async function saveApiKey(providerId: string, key: string) {
@@ -229,7 +261,11 @@ useEffect(() => {
     ? config.providers.find((p) => p.id === addingModelProviderId) ?? null
     : null;
 
-  const activeQueueItem = config.queue[activeIdx];
+  // Use default queue's active item for global status display
+  const defaultQueueState = queueStates[config.default_queue_id];
+  const defaultQueue = config.queues[config.default_queue_id];
+  const defaultActiveIdx = defaultQueueState?.active_idx ?? 0;
+  const activeQueueItem = defaultQueue?.items[defaultActiveIdx] ?? defaultQueue?.items[0];
   const activeProvider = activeQueueItem
     ? config.providers.find((p) => p.id === activeQueueItem.provider_id)
     : undefined;
@@ -406,18 +442,30 @@ await injectProxy(config.port, await getAuth(activeProvider!.id) || "");
         </div>
       </div>
 
-            <QueuePanel
-        queue={config.queue}
+      {/* Queue management panel */}
+      <QueueManagerPanel
+        queues={config.queues}
+        queueStates={queueStates}
         providers={config.providers}
-        exhaustedIndices={exhaustedIndices}
-        activeIdx={activeIdx}
-        onReorder={reorderQueue}
-        onRemove={removeFromQueue}
-        onResetExhausted={() => resetExhausted().then(() => {
-          setExhaustedIndices([]);
-          setActiveIdx(0);
-        }).catch(console.error)}
+        defaultQueueId={config.default_queue_id}
+        selectedQueueId={selectedQueueId}
+        onSelectQueue={setSelectedQueueId}
+        onCreateQueue={handleCreateQueue}
+        onDeleteQueue={handleDeleteQueue}
       />
+
+      {/* Selected queue detail */}
+      {selectedQueueId && config.queues[selectedQueueId] && (
+        <QueueDetailPanel
+          queueId={selectedQueueId}
+          items={config.queues[selectedQueueId].items}
+          providers={config.providers}
+          stateInfo={queueStates[selectedQueueId]}
+          onReorder={(items) => reorderQueue(selectedQueueId, items)}
+          onRemove={(index) => removeFromQueue(selectedQueueId, index)}
+          onResetExhausted={() => handleResetQueueExhausted(selectedQueueId)}
+        />
+      )}
 
       {/* Provider grid header */}
       <div style={{ padding: "24px 24px 12px", display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
@@ -525,7 +573,8 @@ await injectProxy(config.port, await getAuth(activeProvider!.id) || "");
             if (portChanged) {
               restartProxy(newPort).then(async () => {
                 if (appStates.cc) {
-                  const head = next.queue[0];
+                  const defaultQueue = next.queues[next.default_queue_id];
+                  const head = defaultQueue?.items[0];
                   const p = head ? next.providers.find((pr) => pr.id === head.provider_id) : undefined;
                   if (p) {
                     const apiKey = await getAuth(p.id);
