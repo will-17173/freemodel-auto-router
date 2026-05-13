@@ -5,7 +5,7 @@ import {
   getConfig, saveConfig, injectProxy, updateActive, restoreBackup, isInjected, restartProxy,
   injectCodex, removeCodex, injectHermes, removeHermes, isHermesInjected,
   injectOpenclaw, removeOpenclaw,
-  getQueueStates, resetQueueExhausted, createQueue, deleteQueue,
+  getQueueStates, resetQueueExhausted, createQueue, deleteQueue, updateQueue,
   getAuth, saveAuth, getAllAuth,
 } from "./api";
 import { Sidebar, type PageId } from "./components/Sidebar";
@@ -17,7 +17,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
-import type { AppConfig, Provider, QueueItem, QueueStateInfo, ProviderSwitchedPayload } from "./types";
+import type { AppConfig, Provider, QueueItem, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
 import "./App.css";
 
 function slugifyProviderName(name: string) {
@@ -58,6 +58,11 @@ export default function App() {
   });
   const [queueStates, setQueueStates] = useState<Record<string, QueueStateInfo>>({});
   const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
+
+  // Draft queue panel state
+  const [showDraftPanel, setShowDraftPanel] = useState(false);
+  const [draftQueueName, setDraftQueueName] = useState("");
+  const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
 
   useEffect(() => {
     getConfig().then(setConfig);
@@ -151,6 +156,12 @@ export default function App() {
 
   function addToQueue(providerId: string, modelId: string) {
     if (!authMap[providerId]) return;  // 需要 API key 才能添加
+
+    if (showDraftPanel) {
+      addToDraft(providerId, modelId);
+      return;
+    }
+
     if (!selectedQueueId) return;
     const newItem: QueueItem = { provider_id: providerId, model_id: modelId };
     const queue = config!.queues[selectedQueueId];
@@ -213,6 +224,97 @@ export default function App() {
     resetQueueExhausted(queueId).then(() => {
       getQueueStates().then(setQueueStates).catch(console.error);
     }).catch(console.error);
+  }
+
+  function clearAndCloseDraft() {
+    setDraftItems([]);
+    setDraftQueueName("");
+    setShowDraftPanel(false);
+  }
+
+  function openDraftPanel() {
+    const queueCount = Object.keys(config!.queues).length;
+    const defaultName = `队列 ${queueCount + 1}`;
+    setDraftQueueName(defaultName);
+    setDraftItems([]);
+    setShowDraftPanel(true);
+  }
+
+  function addToDraft(providerId: string, modelId: string) {
+    const exists = draftItems.some(
+      (item) => item.provider_id === providerId && item.model_id === modelId
+    );
+    if (exists) {
+      alert("该模型已存在于缓存区");
+      return;
+    }
+    setDraftItems([...draftItems, { provider_id: providerId, model_id: modelId }]);
+  }
+
+  function removeFromDraft(index: number) {
+    setDraftItems(draftItems.filter((_, i) => i !== index));
+  }
+
+  function reorderDraftItems(newItems: DraftItem[]) {
+    setDraftItems(newItems);
+  }
+
+  function clearDraftItems() {
+    setDraftItems([]);
+  }
+
+  function closeDraftPanel() {
+    if (draftItems.length > 0) {
+      if (window.confirm("缓存区有未保存的内容，关闭将丢弃。确定关闭？")) {
+        clearAndCloseDraft();
+      }
+      return;
+    }
+    clearAndCloseDraft();
+  }
+
+  function cancelDraftPanel() {
+    if (draftItems.length > 0) {
+      if (window.confirm("未保存的内容将丢弃。确定取消？")) {
+        clearAndCloseDraft();
+      }
+      return;
+    }
+    clearAndCloseDraft();
+  }
+
+  async function saveDraftQueue() {
+    if (!draftQueueName.trim()) {
+      alert("队列名不能为空");
+      return;
+    }
+    if (draftItems.length === 0) {
+      alert("缓存区为空，请添加至少一个模型");
+      return;
+    }
+
+    try {
+      const newQueue = await createQueue(draftQueueName);
+      if (draftItems.length > 0) {
+        await updateQueue(newQueue.id, draftQueueName, draftItems);
+      }
+
+      setConfig((prev) =>
+        prev
+          ? {
+              ...prev,
+              queues: { ...prev.queues, [newQueue.id]: { ...newQueue, items: draftItems } },
+            }
+          : prev
+      );
+      setSelectedQueueId(newQueue.id);
+
+      clearAndCloseDraft();
+      alert(`队列 "${draftQueueName}" 创建成功`);
+    } catch (e) {
+      alert("创建队列失败");
+      console.error(e);
+    }
   }
 
   async function saveApiKey(providerId: string, key: string) {
