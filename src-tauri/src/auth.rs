@@ -44,11 +44,6 @@ pub fn save_api_key(provider_id: &str, api_key: &str) -> Result<()> {
     save_auth(&auth)
 }
 
-pub fn remove_api_key(provider_id: &str) -> Result<()> {
-    let mut auth = load_auth();
-    auth.remove(provider_id);
-    save_auth(&auth)
-}
 
 /// 返回所有 provider_id 及是否有 key（不返回实际值）
 pub fn has_auth_map() -> HashMap<String, bool> {

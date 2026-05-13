@@ -1,4 +1,4 @@
-use crate::config::{AppConfig, AppMapping, Provider, Queue, QueueItem, RetryConfig};
+use crate::config::{AppConfig, AppMapping, Provider, QueueItem, RetryConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
@@ -69,6 +69,7 @@ pub struct RouterState {
 }
 
 impl RouterState {
+    #[allow(dead_code)]
     pub fn from_config(cfg: &AppConfig) -> Self {
         let queues: HashMap<String, QueueState> = cfg
             .queues
@@ -236,23 +237,27 @@ impl RouterState {
     // ── Backward-compatible shims (delegate to the default queue) ──────────
 
     /// Returns (Provider, model_id) for the default queue's active entry.
+    #[allow(dead_code)]
     pub fn active_entry(&self) -> Option<(&Provider, &str)> {
         self.active_entry_for_queue(&self.default_queue_id)
     }
 
     /// Records a failure against the default queue.
+    #[allow(dead_code)]
     pub fn record_failure(&mut self) -> FailureAction {
         let queue_id = self.default_queue_id.clone();
         self.record_failure_for_queue(&queue_id)
     }
 
     /// Resets exhausted state for the default queue.
+    #[allow(dead_code)]
     pub fn reset_exhausted(&mut self) {
         let queue_id = self.default_queue_id.clone();
         self.reset_queue_exhausted(&queue_id);
     }
 
     /// Returns the exhausted indices for the default queue.
+    #[allow(dead_code)]
     pub fn get_exhausted_indices(&self) -> Vec<usize> {
         self.queues
             .get(&self.default_queue_id)
@@ -261,6 +266,7 @@ impl RouterState {
     }
 
     /// Returns the active_idx for the default queue.
+    #[allow(dead_code)]
     pub fn get_active_idx(&self) -> usize {
         self.queues
             .get(&self.default_queue_id)
@@ -271,6 +277,7 @@ impl RouterState {
 
 pub type SharedRouter = Arc<RwLock<RouterState>>;
 
+#[allow(dead_code)]
 pub fn new_router(cfg: &AppConfig) -> SharedRouter {
     Arc::new(RwLock::new(RouterState::from_config(cfg)))
 }

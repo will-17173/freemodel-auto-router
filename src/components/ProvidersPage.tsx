@@ -1,108 +1,128 @@
-import { Button } from "@/components/ui/button"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Plus, Key, Check } from "lucide-react"
+import { useState } from "react"
+import { Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
-import type { Provider } from "@/types"
+import { CreateQueueModal } from "./CreateQueueModal"
+import type { Provider, Queue } from "@/types"
 
 interface ProvidersPageProps {
   providers: Provider[]
   authMap: Record<string, boolean>
   activeProviderId: string | undefined
+  queues: Record<string, Queue>
+  selectedQueueId: string | null
   onAddToQueue: (providerId: string, modelId: string) => void
   onConfigKey: (providerId: string) => void
   onAddModel: (providerId: string) => void
   onAddProvider: () => void
+  onSelectQueue: (queueId: string) => void
+  onCreateQueue: (name: string) => void
 }
 
 export function ProvidersPage({
   providers,
   authMap,
   activeProviderId,
+  queues,
+  selectedQueueId,
   onAddToQueue,
   onConfigKey,
   onAddModel,
   onAddProvider,
+  onSelectQueue,
+  onCreateQueue,
 }: ProvidersPageProps) {
+  const [showCreateQueueModal, setShowCreateQueueModal] = useState(false)
+
   return (
     <div className="flex-1 p-6 overflow-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold">供应商</h1>
-        <Button onClick={onAddProvider} size="sm" className="gap-1">
-          <Plus className="h-3.5 w-3.5" />
-          添加
-        </Button>
+        <div className="flex items-center gap-2">
+          {/* Queue selector */}
+          <select
+            value={selectedQueueId ?? ""}
+            onChange={(e) => onSelectQueue(e.target.value)}
+            className="text-sm px-3 py-1.5 rounded-lg border border-border bg-background text-foreground"
+          >
+            {Object.values(queues).map((q) => (
+              <option key={q.id} value={q.id}>{q.name}</option>
+            ))}
+          </select>
+          <button
+            onClick={() => setShowCreateQueueModal(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border text-muted-foreground text-sm rounded-lg hover:border-primary hover:text-primary transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            新建队列
+          </button>
+          <button
+            onClick={onAddProvider}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            添加
+          </button>
+        </div>
       </div>
 
       {/* Grid */}
       <div className="grid grid-cols-2 gap-4">
         {providers.map((provider) => (
-          <Card
+          <div
             key={provider.id}
             className={cn(
-              "relative",
-              activeProviderId === provider.id && "border-primary"
+              "bg-card rounded-xl border p-5 transition-all",
+              activeProviderId === provider.id
+                ? "border-primary shadow-[0_0_0_3px_rgba(255,85,0,0.12)]"
+                : "border-border shadow-sm hover:border-primary/40 hover:shadow-md"
             )}
           >
-            {activeProviderId === provider.id && (
-              <div className="absolute top-0 left-6 right-6 h-[3px] bg-primary rounded-b" />
-            )}
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  {activeProviderId === provider.id && (
-                    <span className="w-2 h-2 rounded-full bg-primary" />
-                  )}
-                  <CardTitle className="text-base">{provider.name}</CardTitle>
-                </div>
-                <Button
-                  variant={authMap[provider.id] ? "secondary" : "outline"}
-                  size="sm"
-                  className="gap-1"
-                  onClick={() => onConfigKey(provider.id)}
-                >
-                  {authMap[provider.id] ? (
-                    <>
-                      <Check className="h-3 w-3" />
-                      Key ✓
-                    </>
-                  ) : (
-                    <>
-                      <Key className="h-3 w-3" />
-                      配置 Key
-                    </>
-                  )}
-                </Button>
+            {/* Card header */}
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                {activeProviderId === provider.id && (
+                  <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                )}
+                <span className="font-semibold text-sm text-foreground">{provider.name}</span>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {provider.models.map((model) => (
-                  <Badge
-                    key={model.id}
-                    variant="secondary"
-                    className={cn(
-                      "gap-1 cursor-pointer",
-                      authMap[provider.id] && "hover:bg-primary hover:text-primary-foreground"
-                    )}
-                    onClick={() => authMap[provider.id] && onAddToQueue(provider.id, model.id)}
-                  >
-                    {model.name}
-                    <Plus className="h-3 w-3" />
-                  </Badge>
-                ))}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 px-2 text-xs"
-                  onClick={() => onAddModel(provider.id)}
+              <button
+                className={cn(
+                  "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                  authMap[provider.id]
+                    ? "border-border text-muted-foreground bg-muted hover:border-primary hover:text-primary"
+                    : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                )}
+                onClick={() => onConfigKey(provider.id)}
+              >
+                {authMap[provider.id] ? "✓ Key" : "配置 Key"}
+              </button>
+            </div>
+            {/* Models */}
+            <div className="flex flex-wrap gap-1.5">
+              {provider.models.map((model) => (
+                <button
+                  key={model.id}
+                  disabled={!authMap[provider.id]}
+                  onClick={() => authMap[provider.id] && onAddToQueue(provider.id, model.id)}
+                  className={cn(
+                    "text-xs px-2.5 py-1 rounded-full border transition-colors",
+                    authMap[provider.id]
+                      ? "border-border text-foreground bg-muted/50 hover:border-primary hover:text-primary hover:bg-orange-50 cursor-pointer"
+                      : "border-border text-muted-foreground bg-muted/30 cursor-not-allowed opacity-60"
+                  )}
                 >
-                  <Plus className="h-3 w-3" />
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
+                  {model.name} +
+                </button>
+              ))}
+              <button
+                className="text-xs px-2.5 py-1 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                onClick={() => onAddModel(provider.id)}
+              >
+                + 模型
+              </button>
+            </div>
+          </div>
         ))}
 
         {/* Add provider placeholder */}
@@ -113,6 +133,15 @@ export function ProvidersPage({
           + 添加供应商
         </button>
       </div>
+
+      <CreateQueueModal
+        open={showCreateQueueModal}
+        onClose={() => setShowCreateQueueModal(false)}
+        onCreate={(name) => {
+          onCreateQueue(name)
+          setShowCreateQueueModal(false)
+        }}
+      />
     </div>
   )
 }

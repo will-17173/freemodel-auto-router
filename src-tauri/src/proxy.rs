@@ -218,10 +218,14 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             ],
         );
 
+        let start_time = std::time::Instant::now();
         match req_builder.send().await {
             Ok(resp) => {
                 let status = resp.status().as_u16();
-                state.logs.push(
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                let input_tokens: Option<u64> = None;
+                let output_tokens: Option<u64> = None;
+                state.logs.push_detailed(
                     if is_retryable_error(status) {
                         LogLevel::Warn
                     } else {
@@ -229,10 +233,14 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                     },
                     "upstream response",
                     [
-                        ("provider", provider_name.clone()),
-                        ("model", model_id.clone()),
                         ("status", status.to_string()),
                     ],
+                    Some(provider_name.clone()),
+                    Some(model_id.clone()),
+                    Some(status),
+                    input_tokens,
+                    output_tokens,
+                    Some(duration_ms),
                 );
                 if is_retryable_error(status) {
                     let failure_action = {
@@ -375,6 +383,7 @@ fn rewrite_model_field(body: &[u8], model_id: &str) -> bytes::Bytes {
     bytes::Bytes::copy_from_slice(body)
 }
 
+#[allow(dead_code)]
 fn build_upstream_headers(
     original_headers: &HeaderMap,
     auth_scheme: &AuthScheme,

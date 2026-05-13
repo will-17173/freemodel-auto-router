@@ -8,7 +8,7 @@ fn codex_dir() -> PathBuf {
         .join(".codex")
 }
 
-pub fn inject(provider_id: &str, api_key: &str, port: u16) -> Result<()> {
+pub fn inject(_provider_id: &str, api_key: &str, port: u16) -> Result<()> {
     let dir = codex_dir();
     fs::create_dir_all(&dir)?;
 

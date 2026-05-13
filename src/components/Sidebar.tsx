@@ -1,5 +1,6 @@
+import { useState, useEffect } from "react"
+import { getVersion } from "@tauri-apps/api/app"
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import {
   LayoutGrid,
   ListOrdered,
@@ -22,31 +23,42 @@ const menuItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
 ]
 
 export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
+  const [version, setVersion] = useState("")
+  useEffect(() => {
+    getVersion().then(setVersion).catch(() => setVersion("0.1.0"))
+  }, [])
+
   return (
-    <div className="w-[200px] h-full bg-secondary border-r border-border flex flex-col">
+    <div className="w-[240px] h-full bg-secondary border-r border-border flex flex-col shrink-0">
       {/* Logo */}
-      <div className="p-5">
+      <div className="p-5 pb-4">
         <div className="font-semibold text-base text-foreground">freemodel</div>
         <div className="text-xs text-muted-foreground">auto-router</div>
       </div>
 
       {/* Menu items */}
-      <nav className="flex flex-col gap-1 px-3">
+      <nav className="flex flex-col gap-0.5 px-2">
         {menuItems.map((item) => (
-          <Button
+          <button
             key={item.id}
-            variant="ghost"
-            className={cn(
-              "justify-start gap-2",
-              currentPage === item.id && "bg-background border border-border font-medium"
-            )}
             onClick={() => onPageChange(item.id)}
+            className={cn(
+              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left",
+              currentPage === item.id
+                ? "bg-primary/10 text-primary font-medium border border-primary/20"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            )}
           >
             {item.icon}
             {item.label}
-          </Button>
+          </button>
         ))}
       </nav>
+
+      {/* Version footer */}
+      <div className="mt-auto px-4 py-3 text-xs text-muted-foreground">
+        v{version}
+      </div>
     </div>
   )
 }

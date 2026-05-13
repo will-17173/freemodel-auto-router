@@ -339,10 +339,14 @@ export default function App() {
             providers={config.providers}
             authMap={authMap}
             activeProviderId={activeQueueItem?.provider_id}
+            queues={config.queues}
+            selectedQueueId={selectedQueueId}
             onAddToQueue={addToQueue}
             onConfigKey={(id) => setEditingKeyProviderId(id)}
             onAddModel={(id) => setAddingModelProviderId(id)}
             onAddProvider={() => setShowAddProvider(true)}
+            onSelectQueue={setSelectedQueueId}
+            onCreateQueue={handleCreateQueue}
           />
         )}
         {currentPage === "queue" && (

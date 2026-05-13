@@ -1,6 +1,8 @@
+import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { X, GripVertical } from "lucide-react"
+import { CreateQueueModal } from "./CreateQueueModal"
 import { cn } from "@/lib/utils"
 import type { QueueItem, Provider, QueueStateInfo, Queue } from "@/types"
 import {
@@ -14,7 +16,7 @@ import {
 import {
   SortableContext,
   useSortable,
-  rectSortingStrategy,
+  verticalListSortingStrategy,
   arrayMove,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
@@ -101,6 +103,8 @@ export function QueuePage({
   onRemove,
   onResetExhausted,
 }: QueuePageProps) {
+  const [showCreateModal, setShowCreateModal] = useState(false)
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
@@ -131,23 +135,10 @@ export function QueuePage({
   }
 
   return (
-    <div className="flex-1 p-6 overflow-auto">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-lg font-semibold">路由队列</h1>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => {
-            const name = prompt("输入队列名称")?.trim()
-            if (name) onCreateQueue(name)
-          }}
-        >
-          新建队列
-        </Button>
-      </div>
-
-      {/* Queue selector */}
-      <div className="flex flex-wrap gap-2 mb-6">
+    <div className="flex-1 flex overflow-hidden">
+      {/* Left sidebar: queue list */}
+      <div className="w-[200px] border-r border-border bg-secondary/30 p-3 flex flex-col gap-1 shrink-0">
+        <div className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">队列</div>
         {queueList.map((queue) => {
           const state = queueStates[queue.id]
           const isDefault = queue.id === defaultQueueId
@@ -156,82 +147,111 @@ export function QueuePage({
           const exhaustedCount = state?.exhausted_indices.length ?? 0
 
           return (
-            <div
+            <button
               key={queue.id}
               onClick={() => onSelectQueue(queue.id)}
               className={cn(
-                "flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all text-sm",
-                isSelected ? "border-foreground bg-card font-medium" : "border-border hover:border-foreground/50"
+                "flex items-center gap-1.5 px-2 py-2 rounded-lg text-sm transition-colors w-full text-left",
+                isSelected
+                  ? "bg-primary/10 text-primary font-medium border border-primary/20"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
-              <span>{queue.name}</span>
+              <span className="truncate flex-1">{queue.name}</span>
               {isDefault && (
-                <Badge variant="default" className="text-[10px] px-1.5 py-0">默认</Badge>
+                <Badge variant="default" className="text-[10px] px-1 py-0 shrink-0">默</Badge>
               )}
               {itemCount > 0 && (
                 <Badge
                   variant={exhaustedCount >= itemCount ? "destructive" : "secondary"}
-                  className="text-[10px] px-1.5 py-0"
+                  className="text-[10px] px-1 py-0 shrink-0"
                 >
-                  {exhaustedCount >= itemCount ? "用尽" : `${itemCount}项`}
+                  {exhaustedCount >= itemCount ? "尽" : itemCount}
                 </Badge>
               )}
-              {!isDefault && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-4 w-4"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    if (window.confirm(`确定删除队列 "${queue.name}"？`)) {
-                      onDeleteQueue(queue.id)
-                    }
-                  }}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
+            </button>
           )
         })}
+        {/* New queue button */}
+        <button
+          onClick={() => setShowCreateModal(true)}
+          className="flex items-center gap-1.5 px-2 py-2 rounded-lg text-sm text-muted-foreground hover:text-primary border border-dashed border-border hover:border-primary transition-colors mt-1"
+        >
+          <span className="text-base leading-none">+</span>
+          新建队列
+        </button>
       </div>
 
-      {/* Queue items */}
-      {selectedQueueId && (
-        <>
-          {hasExhausted && (
-            <div className="mb-3">
-              <Button variant="ghost" size="sm" onClick={() => onResetExhausted(selectedQueueId)}>
-                重置用尽项
-              </Button>
+      {/* Right content: queue details */}
+      <div className="flex-1 p-6 overflow-auto">
+        {selectedQueueId ? (
+          <>
+            {/* Header with queue name and actions */}
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-lg font-semibold">
+                {selectedQueue?.name ?? "队列"}
+              </h1>
+              <div className="flex items-center gap-2">
+                {hasExhausted && (
+                  <Button variant="ghost" size="sm" onClick={() => onResetExhausted(selectedQueueId)}>
+                    重置用尽项
+                  </Button>
+                )}
+                {selectedQueueId !== defaultQueueId && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-destructive hover:text-destructive"
+                    onClick={() => {
+                      if (window.confirm(`确定删除队列 "${selectedQueue?.name}"？`)) {
+                        onDeleteQueue(selectedQueueId)
+                      }
+                    }}
+                  >
+                    删除队列
+                  </Button>
+                )}
+              </div>
             </div>
-          )}
 
-          {items.length === 0 ? (
-            <div className="text-sm text-muted-foreground py-8 text-center">
-              点击供应商页面的模型 + 添加到队列
-            </div>
-          ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext items={ids} strategy={rectSortingStrategy}>
-                <div className="flex flex-col gap-2">
-                  {items.map((item, i) => (
-                    <SortableQueueItem
-                      key={ids[i]}
-                      uid={ids[i]}
-                      index={i}
-                      label={getLabel(item)}
-                      isActive={i === activeIdx}
-                      isExhausted={exhaustedIndices.includes(i)}
-                      onRemove={(idx) => onRemove(selectedQueueId, idx)}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          )}
-        </>
-      )}
+            {items.length === 0 ? (
+              <div className="text-sm text-muted-foreground py-8 text-center">
+                点击供应商页面的模型 + 添加到队列
+              </div>
+            ) : (
+              <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+                <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+                  <div className="flex flex-col gap-2">
+                    {items.map((item, i) => (
+                      <SortableQueueItem
+                        key={ids[i]}
+                        uid={ids[i]}
+                        index={i}
+                        label={getLabel(item)}
+                        isActive={i === activeIdx}
+                        isExhausted={exhaustedIndices.includes(i)}
+                        onRemove={(idx) => onRemove(selectedQueueId, idx)}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            )}
+          </>
+        ) : (
+          <div className="text-sm text-muted-foreground text-center py-8">
+            请选择一个队列
+          </div>
+        )}
+      </div>
+      <CreateQueueModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
+        onCreate={(name) => {
+          onCreateQueue(name)
+          setShowCreateModal(false)
+        }}
+      />
     </div>
   )
 }

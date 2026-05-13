@@ -75,6 +75,12 @@ export interface ProxyLogEntry {
   level: ProxyLogLevel;
   message: string;
   fields: Record<string, string>;
+  provider?: string;
+  model?: string;
+  status?: number;
+  input_tokens?: number;
+  output_tokens?: number;
+  duration_ms?: number;
 }
 
 export interface ProviderSwitchedPayload {
