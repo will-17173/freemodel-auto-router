@@ -79,13 +79,83 @@ pub struct QueueItem {
     pub model_id: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Queue {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub items: Vec<QueueItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum MatchRuleType {
+    UserAgentContains,
+    HeaderEquals,
+    PathContains,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MatchRule {
+    #[serde(rename = "type")]
+    pub rule_type: MatchRuleType,
+    pub pattern: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub header_name: Option<String>,
+}
+
+impl MatchRule {
+    pub fn matches(&self, ua: &str, headers: &axum::http::HeaderMap, path: &str) -> bool {
+        match &self.rule_type {
+            MatchRuleType::UserAgentContains => ua.contains(&self.pattern),
+            MatchRuleType::HeaderEquals => {
+                let header_name = self.header_name.as_ref().unwrap_or(&self.pattern);
+                headers.get(header_name.as_str())
+                    .and_then(|v| v.to_str().ok())
+                    .map(|v| v == self.pattern)
+                    .unwrap_or(false)
+            },
+            MatchRuleType::PathContains => path.contains(&self.pattern),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AppMapping {
+    pub app_id: String,
+    pub display_name: String,
+    #[serde(default)]
+    pub match_rules: Vec<MatchRule>,
+    pub queue_id: String,
+}
+
 fn default_port() -> u16 { 7860 }
+
+fn default_queues() -> std::collections::HashMap<String, Queue> {
+    let mut map = std::collections::HashMap::new();
+    map.insert("default".to_string(), Queue {
+        id: "default".to_string(),
+        name: "默认队列".to_string(),
+        items: vec![],
+    });
+    map
+}
+
+fn default_queue_id() -> String { "default".to_string() }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
     pub providers: Vec<Provider>,
     pub retry: RetryConfig,
+    // 新字段
+    #[serde(default = "default_queues")]
+    pub queues: std::collections::HashMap<String, Queue>,
     #[serde(default)]
+    pub app_mapping: Vec<AppMapping>,
+    #[serde(default = "default_queue_id")]
+    pub default_queue_id: String,
+    // 保留旧字段用于迁移检测（序列化时跳过）
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub queue: Vec<QueueItem>,
     #[serde(default = "default_port")]
     pub port: u16,
@@ -104,6 +174,9 @@ impl Default for AppConfig {
             port: default_port(),
             providers: load_builtin_providers(),
             retry: RetryConfig::default(),
+            queues: default_queues(),
+            app_mapping: vec![],
+            default_queue_id: default_queue_id(),
             queue: vec![],
         }
     }
@@ -121,7 +194,20 @@ pub fn load_config() -> AppConfig {
     let path = config_path();
     if let Ok(s) = fs::read_to_string(&path) {
         match serde_json::from_str::<AppConfig>(&s) {
-            Ok(cfg) => cfg,
+            Ok(cfg) => {
+                // 迁移旧 queue 到 queues.default
+                let mut cfg = cfg;
+                if !cfg.queue.is_empty() {
+                    if let Some(default_queue) = cfg.queues.get_mut("default") {
+                        if default_queue.items.is_empty() {
+                            default_queue.items = cfg.queue.clone();
+                            log::info!("[config] migrated legacy queue to queues.default ({} items)", cfg.queue.len());
+                        }
+                    }
+                    cfg.queue.clear();  // 清空旧字段
+                }
+                cfg
+            },
             Err(e) => {
                 eprintln!("[config] parse error: {e}");
                 AppConfig::default()
