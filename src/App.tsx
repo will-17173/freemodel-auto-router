@@ -357,7 +357,6 @@ export default function App() {
             defaultQueueId={config.default_queue_id}
             selectedQueueId={selectedQueueId}
             onSelectQueue={setSelectedQueueId}
-            onCreateQueue={handleCreateQueue}
             onDeleteQueue={handleDeleteQueue}
             onReorder={(queueId, items) => reorderQueue(queueId, items)}
             onRemove={(queueId, index) => removeFromQueue(queueId, index)}

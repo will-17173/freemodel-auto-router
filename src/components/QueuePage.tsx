@@ -1,8 +1,6 @@
-import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { X, GripVertical } from "lucide-react"
-import { CreateQueueModal } from "./CreateQueueModal"
 import { cn } from "@/lib/utils"
 import type { QueueItem, Provider, QueueStateInfo, Queue } from "@/types"
 import {
@@ -28,7 +26,6 @@ interface QueuePageProps {
   defaultQueueId: string
   selectedQueueId: string | null
   onSelectQueue: (queueId: string) => void
-  onCreateQueue: (name: string) => void
   onDeleteQueue: (queueId: string) => void
   onReorder: (queueId: string, items: QueueItem[]) => void
   onRemove: (queueId: string, index: number) => void
@@ -97,19 +94,20 @@ export function QueuePage({
   defaultQueueId,
   selectedQueueId,
   onSelectQueue,
-  onCreateQueue,
   onDeleteQueue,
   onReorder,
   onRemove,
   onResetExhausted,
 }: QueuePageProps) {
-  const [showCreateModal, setShowCreateModal] = useState(false)
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  const queueList = Object.values(queues)
+  const queueList = Object.values(queues).sort((a, b) => {
+    if (a.id === defaultQueueId) return -1
+    if (b.id === defaultQueueId) return 1
+    return 0
+  })
   const selectedQueue = selectedQueueId ? queues[selectedQueueId] : null
   const items = selectedQueue?.items ?? []
   const stateInfo = selectedQueueId ? queueStates[selectedQueueId] : undefined
@@ -172,14 +170,6 @@ export function QueuePage({
             </button>
           )
         })}
-        {/* New queue button */}
-        <button
-          onClick={() => setShowCreateModal(true)}
-          className="flex items-center gap-1.5 px-2 py-2 rounded-lg text-sm text-muted-foreground hover:text-primary border border-dashed border-border hover:border-primary transition-colors mt-1"
-        >
-          <span className="text-base leading-none">+</span>
-          新建队列
-        </button>
       </div>
 
       {/* Right content: queue details */}
@@ -244,14 +234,6 @@ export function QueuePage({
           </div>
         )}
       </div>
-      <CreateQueueModal
-        open={showCreateModal}
-        onClose={() => setShowCreateModal(false)}
-        onCreate={(name) => {
-          onCreateQueue(name)
-          setShowCreateModal(false)
-        }}
-      />
     </div>
   )
 }

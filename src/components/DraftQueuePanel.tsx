@@ -98,6 +98,8 @@ export function DraftQueuePanel({
     return `${providerName} / ${modelName}`
   }
 
+  const ids = items.map((item, i) => `${item.provider_id}::${item.model_id}::${i}`)
+
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
     if (!over || active.id === over.id) return
@@ -107,8 +109,6 @@ export function DraftQueuePanel({
       onReorder(arrayMove(items, oldIdx, newIdx))
     }
   }
-
-  const ids = items.map((item, i) => `${item.provider_id}::${item.model_id}::${i}`)
 
   return (
     <div
