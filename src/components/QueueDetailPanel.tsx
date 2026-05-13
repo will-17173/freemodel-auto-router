@@ -10,7 +10,7 @@ import {
   SortableContext,
   useSortable,
   arrayMove,
-  horizontalListSortingStrategy,
+  rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { QueueItem, Provider, QueueStateInfo } from "../types";
@@ -245,7 +245,7 @@ export function QueueDetailPanel({
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <SortableContext items={ids} strategy={horizontalListSortingStrategy}>
+        <SortableContext items={ids} strategy={rectSortingStrategy}>
           <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
             {items.map((item, i) => (
               <SortableQueueItem
