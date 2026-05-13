@@ -104,15 +104,18 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
     // 将 stripped_path 转为 owned String 以避免借用问题
     let stripped_path = stripped_path.to_owned();
 
+    // Identify which queue to use for this request
+    let queue_id = {
+        let r = state.router.read().await;
+        r.identify_queue(&original_headers, &stripped_path)
+    };
+
     log::debug!(
-        "[proxy] inbound {} {} | has_auth={} has_xkey={} ct={:?}",
+        "[proxy] inbound {} {} | queue_id={} has_auth={}",
         method,
         path,
+        queue_id,
         original_headers.contains_key("authorization"),
-        original_headers.contains_key("x-api-key"),
-        original_headers
-            .get("content-type")
-            .and_then(|v| v.to_str().ok()),
     );
     state.logs.push(
         LogLevel::Info,
@@ -120,14 +123,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         [
             ("method", method.as_str().to_owned()),
             ("path", path.clone()),
-            (
-                "content_type",
-                original_headers
-                    .get("content-type")
-                    .and_then(|v| v.to_str().ok())
-                    .unwrap_or("")
-                    .to_owned(),
-            ),
+            ("queue_id", queue_id.clone()),
         ],
     );
 
@@ -139,7 +135,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
     loop {
         let (target_url, protocol, auth_scheme, model_id, provider_name, provider_id) = {
             let r = state.router.read().await;
-            match r.active_entry() {
+            match r.active_entry_for_queue(&queue_id) {
                 Some((p, mid)) => {
                     let target_url = match route_prefix {
                         RoutePrefix::Anthropic => {
@@ -173,7 +169,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                 None => {
                     return error_response(
                         StatusCode::SERVICE_UNAVAILABLE,
-                        "no available provider in queue",
+                        &format!("no available provider in queue '{}'", queue_id),
                     )
                 }
             }
@@ -241,13 +237,13 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                 if is_retryable_error(status) {
                     let failure_action = {
                         let mut r = state.router.write().await;
-                        r.record_failure()
+                        r.record_failure_for_queue(&queue_id)
                     };
                     match failure_action {
                         FailureAction::SwitchProvider => {
                             let next_name = {
                                 let r = state.router.read().await;
-                                r.active_entry()
+                                r.active_entry_for_queue(&queue_id)
                                     .map(|(p, mid)| format!("{} / {}", p.name, mid))
                                     .unwrap_or_default()
                             };
@@ -256,7 +252,11 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                                 "switching provider",
                                 [("next", next_name.clone()), ("status", status.to_string())],
                             );
-                            let _ = state.notify_tx.send(next_name);
+                            let payload = serde_json::json!({
+                                "queue_id": queue_id,
+                                "provider_name": next_name.clone(),
+                            });
+                            let _ = state.notify_tx.send(payload.to_string());
                             continue;
                         }
                         FailureAction::RetryCurrent => {
@@ -309,13 +309,13 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                 );
                 let failure_action = {
                     let mut r = state.router.write().await;
-                    r.record_failure()
+                    r.record_failure_for_queue(&queue_id)
                 };
                 match failure_action {
                     FailureAction::SwitchProvider => {
                         let next_name = {
                             let r = state.router.read().await;
-                            r.active_entry()
+                            r.active_entry_for_queue(&queue_id)
                                 .map(|(p, mid)| format!("{} / {}", p.name, mid))
                                 .unwrap_or_default()
                         };
@@ -327,7 +327,11 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                                 ("reason", "request_error".to_owned()),
                             ],
                         );
-                        let _ = state.notify_tx.send(next_name);
+                        let payload = serde_json::json!({
+                            "queue_id": queue_id,
+                            "provider_name": next_name.clone(),
+                        });
+                        let _ = state.notify_tx.send(payload.to_string());
                         continue;
                     }
                     FailureAction::RetryCurrent => {
