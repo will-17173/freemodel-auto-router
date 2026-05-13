@@ -30,9 +30,39 @@ export interface QueueItem {
   model_id: string;
 }
 
+export interface Queue {
+  id: string;
+  name: string;
+  items: QueueItem[];
+}
+
+export type MatchRuleType = "user_agent_contains" | "header_equals" | "path_contains";
+
+export interface MatchRule {
+  type: MatchRuleType;
+  pattern: string;
+  header_name?: string;
+}
+
+export interface AppMapping {
+  app_id: string;
+  display_name: string;
+  match_rules: MatchRule[];
+  queue_id: string;
+}
+
+export interface QueueStateInfo {
+  active_idx: number;
+  exhausted_indices: number[];
+  items: QueueItem[];
+}
+
 export interface AppConfig {
   providers: Provider[];
   retry: RetryConfig;
+  queues: Record<string, Queue>;
+  app_mapping: AppMapping[];
+  default_queue_id: string;
   queue: QueueItem[];
   port: number;
 }
@@ -45,4 +75,9 @@ export interface ProxyLogEntry {
   level: ProxyLogLevel;
   message: string;
   fields: Record<string, string>;
+}
+
+export interface ProviderSwitchedPayload {
+  queue_id: string;
+  provider_name: string;
 }

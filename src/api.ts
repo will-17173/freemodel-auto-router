@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, ProxyLogEntry, Model } from "./types";
+import type { AppConfig, ProxyLogEntry, Model, Queue, AppMapping, QueueStateInfo, QueueItem } from "./types";
 
 export const getConfig = (): Promise<AppConfig> => invoke("get_config");
 export const saveConfig = (cfg: AppConfig): Promise<void> => invoke("save_config_cmd", { cfg });
@@ -20,7 +20,7 @@ export const saveAuth = (providerId: string, apiKey: string): Promise<void> => i
 export const hasAuth = (providerId: string): Promise<boolean> => invoke("has_auth_cmd", { providerId });
 export const getAllAuth = (): Promise<Record<string, boolean>> => invoke("get_all_auth_cmd");
 
-// Injection API - now use provider_id and api_key separately
+// Injection API
 export const injectCodex = (providerId: string, apiKey: string, port: number): Promise<void> =>
   invoke("inject_codex_cmd", { providerId, apiKey, port });
 export const removeCodex = (): Promise<void> => invoke("remove_codex_cmd");
@@ -32,9 +32,20 @@ export const injectOpenclaw = (providerId: string, apiKey: string, models: Model
   invoke("inject_openclaw_cmd", { providerId, apiKey, models, port });
 export const removeOpenclaw = (providerId: string): Promise<void> => invoke("remove_openclaw_cmd", { providerId });
 
-export const getExhaustedIndices = (): Promise<number[]> => invoke("get_exhausted_indices_cmd");
-export const getActiveIdx = (): Promise<number> => invoke("get_active_idx_cmd");
-export const resetExhausted = (): Promise<void> => invoke("reset_exhausted_cmd");
+// Queue state API
+export const getQueueStates = (): Promise<Record<string, QueueStateInfo>> => invoke("get_queue_states_cmd");
+export const resetQueueExhausted = (queueId: string): Promise<void> => invoke("reset_queue_exhausted_cmd", { queueId });
+
+// Queue management API
+export const createQueue = (name: string): Promise<Queue> => invoke("create_queue_cmd", { name });
+export const deleteQueue = (queueId: string): Promise<void> => invoke("delete_queue_cmd", { queueId });
+export const updateQueue = (queueId: string, name: string, items: QueueItem[]): Promise<void> =>
+  invoke("update_queue_cmd", { queueId, name, items });
+
+// App mapping API
+export const getAppMappings = (): Promise<AppMapping[]> => invoke("get_app_mappings_cmd");
+export const updateAppMapping = (appId: string, queueId: string): Promise<void> =>
+  invoke("update_app_mapping_cmd", { appId, queueId });
 
 // Test connection
 export interface TestConnectionResult {
