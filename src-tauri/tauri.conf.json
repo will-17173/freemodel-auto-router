@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "freemodel-auto-router",
+        "title": "Freemodel Auto Router",
         "width": 1280,
         "height": 800
       }
