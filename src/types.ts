@@ -87,3 +87,9 @@ export interface ProviderSwitchedPayload {
   queue_id: string;
   provider_name: string;
 }
+
+// Draft item for queue creation panel
+export interface DraftItem {
+  provider_id: string;
+  model_id: string;
+}
