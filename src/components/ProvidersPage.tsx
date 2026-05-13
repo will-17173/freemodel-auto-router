@@ -1,7 +1,6 @@
-import { useState } from "react"
 import { Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { CreateQueueModal } from "./CreateQueueModal"
+import { DraftQueuePanel } from "./DraftQueuePanel"
 import type { Provider, Queue, DraftItem } from "@/types"
 
 interface ProvidersPageProps {
@@ -15,15 +14,17 @@ interface ProvidersPageProps {
   onAddModel: (providerId: string) => void
   onAddProvider: () => void
   onSelectQueue: (queueId: string) => void
-  onCreateQueue: (name: string) => void
-  // Draft panel props (wired in Task 8)
-  onOpenDraftPanel?: () => void
-  onRemoveDraftItem?: (index: number) => void
-  onReorderDraftItems?: (items: DraftItem[]) => void
-  onClearDraftItems?: () => void
-  onCloseDraftPanel?: () => void
-  onCancelDraftPanel?: () => void
-  onSaveDraftQueue?: () => void
+  showDraftPanel: boolean
+  draftQueueName: string
+  draftItems: DraftItem[]
+  onDraftQueueNameChange: (name: string) => void
+  onOpenDraftPanel: () => void
+  onRemoveDraftItem: (index: number) => void
+  onReorderDraftItems: (items: DraftItem[]) => void
+  onClearDraftItems: () => void
+  onCloseDraftPanel: () => void
+  onCancelDraftPanel: () => void
+  onSaveDraftQueue: () => void
 }
 
 export function ProvidersPage({
@@ -37,19 +38,25 @@ export function ProvidersPage({
   onAddModel,
   onAddProvider,
   onSelectQueue,
-  onCreateQueue,
-  onOpenDraftPanel: _onOpenDraftPanel,
-  onRemoveDraftItem: _onRemoveDraftItem,
-  onReorderDraftItems: _onReorderDraftItems,
-  onClearDraftItems: _onClearDraftItems,
-  onCloseDraftPanel: _onCloseDraftPanel,
-  onCancelDraftPanel: _onCancelDraftPanel,
-  onSaveDraftQueue: _onSaveDraftQueue,
+  showDraftPanel,
+  draftQueueName,
+  draftItems,
+  onDraftQueueNameChange,
+  onOpenDraftPanel,
+  onRemoveDraftItem,
+  onReorderDraftItems,
+  onClearDraftItems,
+  onCloseDraftPanel,
+  onCancelDraftPanel,
+  onSaveDraftQueue,
 }: ProvidersPageProps) {
-  const [showCreateQueueModal, setShowCreateQueueModal] = useState(false)
-
   return (
-    <div className="flex-1 p-6 overflow-auto">
+    <div className="flex-1 flex overflow-hidden">
+      {/* Main content */}
+      <div className={cn(
+        "flex-1 p-6 overflow-auto transition-[margin-right] duration-300 ease-out",
+        showDraftPanel && "mr-[280px]"
+      )}>
       {/* Header */}
       <div className="flex items-center justify-between mb-5">
         <h1 className="text-lg font-semibold">供应商</h1>
@@ -65,7 +72,7 @@ export function ProvidersPage({
             ))}
           </select>
           <button
-            onClick={() => setShowCreateQueueModal(true)}
+            onClick={onOpenDraftPanel}
             className="flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-border text-muted-foreground text-sm rounded-lg hover:border-primary hover:text-primary transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
@@ -149,13 +156,21 @@ export function ProvidersPage({
         </button>
       </div>
 
-      <CreateQueueModal
-        open={showCreateQueueModal}
-        onClose={() => setShowCreateQueueModal(false)}
-        onCreate={(name) => {
-          onCreateQueue(name)
-          setShowCreateQueueModal(false)
-        }}
+      </div>
+
+      {/* Draft panel */}
+      <DraftQueuePanel
+        open={showDraftPanel}
+        queueName={draftQueueName}
+        items={draftItems}
+        providers={providers}
+        onQueueNameChange={onDraftQueueNameChange}
+        onRemoveItem={onRemoveDraftItem}
+        onClearAll={onClearDraftItems}
+        onReorder={onReorderDraftItems}
+        onSave={onSaveDraftQueue}
+        onCancel={onCancelDraftPanel}
+        onClose={onCloseDraftPanel}
       />
     </div>
   )

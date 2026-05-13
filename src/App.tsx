@@ -193,17 +193,6 @@ export default function App() {
     updateAndSave({ ...config!, queues: { ...config!.queues, [queueId]: updatedQueue } });
   }
 
-  function handleCreateQueue(name: string) {
-    createQueue(name).then((newQueue) => {
-      setConfig(prev => prev ? {
-        ...prev,
-        queues: { ...prev.queues, [newQueue.id]: newQueue }
-      } : prev);
-      setSelectedQueueId(newQueue.id);
-      // Save already done by create_queue_cmd on backend
-    }).catch(console.error);
-  }
-
   function handleDeleteQueue(queueId: string) {
     deleteQueue(queueId).then(() => {
       setConfig(prev => {
@@ -446,7 +435,10 @@ export default function App() {
             onAddModel={(id) => setAddingModelProviderId(id)}
             onAddProvider={() => setShowAddProvider(true)}
             onSelectQueue={setSelectedQueueId}
-            onCreateQueue={handleCreateQueue}
+            showDraftPanel={showDraftPanel}
+            draftQueueName={draftQueueName}
+            draftItems={draftItems}
+            onDraftQueueNameChange={setDraftQueueName}
             onOpenDraftPanel={openDraftPanel}
             onRemoveDraftItem={removeFromDraft}
             onReorderDraftItems={reorderDraftItems}
