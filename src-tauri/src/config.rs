@@ -109,7 +109,7 @@ impl MatchRule {
         match &self.rule_type {
             MatchRuleType::UserAgentContains => ua.contains(&self.pattern),
             MatchRuleType::HeaderEquals => {
-                let header_name = self.header_name.as_ref().unwrap_or(&self.pattern);
+                let Some(header_name) = self.header_name.as_ref() else { return false };
                 headers.get(header_name.as_str())
                     .and_then(|v| v.to_str().ok())
                     .map(|v| v == self.pattern)
@@ -205,6 +205,10 @@ pub fn load_config() -> AppConfig {
                         }
                     }
                     cfg.queue.clear();  // 清空旧字段
+                    // Persist migration so it doesn't repeat on next startup
+                    if let Err(e) = save_config(&cfg) {
+                        log::warn!("[config] failed to persist migration: {e}");
+                    }
                 }
                 cfg
             },
