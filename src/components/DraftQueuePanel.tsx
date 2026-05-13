@@ -98,7 +98,7 @@ export function DraftQueuePanel({
     return `${providerName} / ${modelName}`
   }
 
-  const ids = items.map((item, i) => `${item.provider_id}::${item.model_id}::${i}`)
+  const ids = items.map((item) => `${item.provider_id}::${item.model_id}`)
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event

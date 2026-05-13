@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { sendNotification } from "@tauri-apps/plugin-notification";
 import {
@@ -17,7 +17,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
-import type { AppConfig, Provider, QueueItem, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
+import type { AppConfig, Provider, Queue, QueueItem, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
 import "./App.css";
 
 function slugifyProviderName(name: string) {
@@ -63,6 +63,7 @@ export default function App() {
   const [showDraftPanel, setShowDraftPanel] = useState(false);
   const [draftQueueName, setDraftQueueName] = useState("");
   const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
+  const isSavingDraftRef = useRef(false);
 
   useEffect(() => {
     getConfig().then(setConfig);
@@ -283,6 +284,7 @@ export default function App() {
   }
 
   async function saveDraftQueue() {
+    if (isSavingDraftRef.current) return;
     if (!draftQueueName.trim()) {
       alert("队列名不能为空");
       return;
@@ -292,15 +294,17 @@ export default function App() {
       return;
     }
 
+    isSavingDraftRef.current = true;
+    let newQueue: Queue | undefined;
     try {
-      const newQueue = await createQueue(draftQueueName);
+      newQueue = await createQueue(draftQueueName);
       await updateQueue(newQueue.id, draftQueueName, draftItems);
 
       setConfig((prev) =>
         prev
           ? {
               ...prev,
-              queues: { ...prev.queues, [newQueue.id]: { ...newQueue, items: draftItems } },
+              queues: { ...prev.queues, [newQueue!.id]: { ...newQueue!, items: draftItems } },
             }
           : prev
       );
@@ -309,8 +313,13 @@ export default function App() {
       clearAndCloseDraft();
       alert(`队列 "${draftQueueName}" 创建成功`);
     } catch (e) {
+      if (newQueue) {
+        deleteQueue(newQueue.id).catch(console.error);
+      }
       alert("创建队列失败");
       console.error(e);
+    } finally {
+      isSavingDraftRef.current = false;
     }
   }
 
