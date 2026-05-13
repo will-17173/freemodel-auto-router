@@ -222,6 +222,7 @@ export default function App() {
   }
 
   function openDraftPanel() {
+    if (showDraftPanel) return; // already open, don't reset
     const queueCount = Object.keys(config!.queues).length;
     const defaultName = `队列 ${queueCount + 1}`;
     setDraftQueueName(defaultName);

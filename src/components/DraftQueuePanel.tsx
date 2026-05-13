@@ -113,7 +113,7 @@ export function DraftQueuePanel({
   return (
     <div
       className={cn(
-        "fixed right-0 top-0 bottom-0 w-[280px] border-l border-border bg-background shadow-xl z-40",
+        "fixed right-0 top-12 bottom-0 w-[280px] border-l border-border bg-background shadow-xl z-40",
         "transition-transform duration-300 ease-in-out",
         open ? "translate-x-0" : "translate-x-full"
       )}
