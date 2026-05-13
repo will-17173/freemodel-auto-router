@@ -139,6 +139,15 @@ export default function App() {
       .catch(console.error);
   }, [config, queueStates]);
 
+  // Close draft panel when switching away from providers page
+  useEffect(() => {
+    if (currentPage !== "providers") {
+      setShowDraftPanel(false);
+      setDraftItems([]);
+      setDraftQueueName("");
+    }
+  }, [currentPage]);
+
   if (!config) return (
     <div className="h-screen flex items-center justify-center bg-background">
       <div className="flex items-center gap-2">
