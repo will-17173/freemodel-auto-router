@@ -112,9 +112,13 @@ pub fn run() {
             is_hermes_injected_cmd,
             inject_openclaw_cmd,
             remove_openclaw_cmd,
-            get_exhausted_indices_cmd,
-            get_active_idx_cmd,
-            reset_exhausted_cmd,
+            get_queue_states_cmd,
+            reset_queue_exhausted_cmd,
+            create_queue_cmd,
+            delete_queue_cmd,
+            update_queue_cmd,
+            get_app_mappings_cmd,
+            update_app_mapping_cmd,
             get_auth_cmd,
             save_auth_cmd,
             has_auth_cmd,
@@ -436,24 +440,18 @@ fn remove_openclaw_cmd(
 }
 
 #[tauri::command]
-async fn get_exhausted_indices_cmd(
+async fn get_queue_states_cmd(
     router: tauri::State<'_, router::SharedRouter>,
-) -> Result<Vec<usize>, String> {
-    Ok(router.read().await.get_exhausted_indices())
+) -> Result<std::collections::HashMap<String, router::QueueStateInfo>, String> {
+    Ok(router.read().await.get_all_queue_states())
 }
 
 #[tauri::command]
-async fn get_active_idx_cmd(
-    router: tauri::State<'_, router::SharedRouter>,
-) -> Result<usize, String> {
-    Ok(router.read().await.get_active_idx())
-}
-
-#[tauri::command]
-async fn reset_exhausted_cmd(
+async fn reset_queue_exhausted_cmd(
+    queue_id: String,
     router: tauri::State<'_, router::SharedRouter>,
 ) -> Result<(), String> {
-    router.write().await.reset_exhausted();
+    router.write().await.reset_queue_exhausted(&queue_id);
     Ok(())
 }
 
@@ -507,6 +505,125 @@ pub struct TestConnectionResult {
     pub success: bool,
     pub message: String,
     pub latency_ms: Option<u64>,
+}
+
+// ===== 队列管理 =====
+
+#[tauri::command]
+async fn create_queue_cmd(
+    name: String,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<config::Queue, String> {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
+    let id = format!("queue-{:08x}", ts);
+
+    let queue = config::Queue {
+        id: id.clone(),
+        name,
+        items: vec![],
+    };
+
+    // Update router state
+    router.write().await.queues.insert(
+        id.clone(),
+        router::QueueState::from_items(vec![]),
+    );
+
+    // Save config
+    let mut cfg = config::load_config();
+    cfg.queues.insert(id, queue.clone());
+    config::save_config(&cfg).map_err(|e| e.to_string())?;
+
+    Ok(queue)
+}
+
+#[tauri::command]
+async fn delete_queue_cmd(
+    queue_id: String,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    // Cannot delete default queue
+    let cfg = config::load_config();
+    if queue_id == cfg.default_queue_id {
+        return Err("不能删除默认队列".to_string());
+    }
+
+    // Update router state
+    router.write().await.queues.remove(&queue_id);
+
+    // Save config
+    let mut cfg = config::load_config();
+    cfg.queues.remove(&queue_id);
+    // Remove associated app_mapping entries
+    cfg.app_mapping.retain(|m| m.queue_id != queue_id);
+    config::save_config(&cfg).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn update_queue_cmd(
+    queue_id: String,
+    name: String,
+    items: Vec<config::QueueItem>,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    // Update router state
+    {
+        let mut r = router.write().await;
+        if let Some(queue_state) = r.queues.get_mut(&queue_id) {
+            let n = items.len();
+            queue_state.items = items.clone();
+            queue_state.fail_counts = vec![0; n];
+            queue_state.exhausted_indices.clear();
+            queue_state.active_idx = 0;
+        }
+    }
+
+    // Save config
+    let mut cfg = config::load_config();
+    if let Some(queue) = cfg.queues.get_mut(&queue_id) {
+        queue.name = name;
+        queue.items = items;
+    }
+    config::save_config(&cfg).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn get_app_mappings_cmd() -> Vec<config::AppMapping> {
+    config::load_config().app_mapping
+}
+
+#[tauri::command]
+async fn update_app_mapping_cmd(
+    app_id: String,
+    queue_id: String,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
+    // Save config
+    let mut cfg = config::load_config();
+    if let Some(mapping) = cfg.app_mapping.iter_mut().find(|m| m.app_id == app_id) {
+        mapping.queue_id = queue_id;
+    } else {
+        cfg.app_mapping.push(config::AppMapping {
+            app_id: app_id.clone(),
+            display_name: app_id,
+            match_rules: vec![],
+            queue_id,
+        });
+    }
+
+    // Update router state
+    router.write().await.app_mapping = cfg.app_mapping.clone();
+
+    config::save_config(&cfg).map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 async fn test_provider_connection(provider: config::Provider, api_key: String) -> Result<TestConnectionResult, String> {
