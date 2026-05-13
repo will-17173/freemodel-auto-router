@@ -16,6 +16,29 @@
 
 /* ── Design Tokens — Figma-inspired light mode ── */
 :root {
+  /* shadcn/ui CSS variables — Airbnb palette */
+  --background: 0 0% 100%;
+  --foreground: 0 0% 13%;
+  --card: 0 0% 100%;
+  --card-foreground: 0 0% 13%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 0 0% 13%;
+  --primary: 0 84% 60%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 97%;
+  --secondary-foreground: 0 0% 13%;
+  --muted: 0 0% 97%;
+  --muted-foreground: 0 0% 42%;
+  --accent: 0 84% 60%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 0 84% 60%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 87%;
+  --input: 0 0% 87%;
+  --ring: 0 84% 60%;
+  --radius: 0.875rem;
+
+  /* Legacy fm-* tokens */
   --fm-font-sans: "MonuTitl", "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
   --fm-font-mono: "MonuTitl", "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
 
