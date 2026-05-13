@@ -2,7 +2,7 @@ import { useState } from "react"
 import { Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CreateQueueModal } from "./CreateQueueModal"
-import type { Provider, Queue } from "@/types"
+import type { Provider, Queue, DraftItem } from "@/types"
 
 interface ProvidersPageProps {
   providers: Provider[]
@@ -16,6 +16,14 @@ interface ProvidersPageProps {
   onAddProvider: () => void
   onSelectQueue: (queueId: string) => void
   onCreateQueue: (name: string) => void
+  // Draft panel props (wired in Task 8)
+  onOpenDraftPanel?: () => void
+  onRemoveDraftItem?: (index: number) => void
+  onReorderDraftItems?: (items: DraftItem[]) => void
+  onClearDraftItems?: () => void
+  onCloseDraftPanel?: () => void
+  onCancelDraftPanel?: () => void
+  onSaveDraftQueue?: () => void
 }
 
 export function ProvidersPage({
@@ -30,6 +38,13 @@ export function ProvidersPage({
   onAddProvider,
   onSelectQueue,
   onCreateQueue,
+  onOpenDraftPanel: _onOpenDraftPanel,
+  onRemoveDraftItem: _onRemoveDraftItem,
+  onReorderDraftItems: _onReorderDraftItems,
+  onClearDraftItems: _onClearDraftItems,
+  onCloseDraftPanel: _onCloseDraftPanel,
+  onCancelDraftPanel: _onCancelDraftPanel,
+  onSaveDraftQueue: _onSaveDraftQueue,
 }: ProvidersPageProps) {
   const [showCreateQueueModal, setShowCreateQueueModal] = useState(false)
 

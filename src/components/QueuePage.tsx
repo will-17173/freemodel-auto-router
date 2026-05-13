@@ -30,7 +30,6 @@ interface QueuePageProps {
   onReorder: (queueId: string, items: QueueItem[]) => void
   onRemove: (queueId: string, index: number) => void
   onResetExhausted: (queueId: string) => void
-  onOpenDraftPanel?: () => void
 }
 
 function SortableQueueItem({
@@ -99,7 +98,6 @@ export function QueuePage({
   onReorder,
   onRemove,
   onResetExhausted,
-  onOpenDraftPanel,
 }: QueuePageProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -138,18 +136,7 @@ export function QueuePage({
     <div className="flex-1 flex overflow-hidden">
       {/* Left sidebar: queue list */}
       <div className="w-[200px] border-r border-border bg-secondary/30 p-3 flex flex-col gap-1 shrink-0">
-        <div className="flex items-center justify-between px-2 py-1 mb-1">
-          <span className="text-xs font-medium text-muted-foreground">队列</span>
-          {onOpenDraftPanel && (
-            <button
-              onClick={onOpenDraftPanel}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-              title="新建队列"
-            >
-              +
-            </button>
-          )}
-        </div>
+        <div className="text-xs font-medium text-muted-foreground px-2 py-1 mb-1">队列</div>
         {queueList.map((queue) => {
           const state = queueStates[queue.id]
           const isDefault = queue.id === defaultQueueId
