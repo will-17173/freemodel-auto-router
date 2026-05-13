@@ -82,14 +82,15 @@ export default function App() {
     return () => { unlisten.then(f => f()); };
   }, []);
 
-  // Poll queue states every 5 seconds
+  // Poll queue states every 5 seconds (start once config is available)
+  const configLoaded = config !== null;
   useEffect(() => {
-    if (!config) return;
+    if (!configLoaded) return;
     const interval = setInterval(() => {
       getQueueStates().then(setQueueStates).catch(console.error);
     }, 5000);
     return () => clearInterval(interval);
-  }, [config]);
+  }, [configLoaded]);
 
   // Load queue states on config load
   useEffect(() => {
@@ -203,7 +204,11 @@ export default function App() {
         delete updatedQueues[queueId];
         return { ...prev, queues: updatedQueues };
       });
-      setSelectedQueueId(prev => prev === queueId ? config!.default_queue_id : prev);
+      setSelectedQueueId(prev => {
+        if (prev !== queueId) return prev;
+        const remaining = Object.keys(config!.queues).filter(id => id !== queueId);
+        return remaining[0] ?? null;
+      });
     }).catch(console.error);
   }
 
