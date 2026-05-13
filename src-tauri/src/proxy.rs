@@ -184,7 +184,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         // Rewrite the "model" field in the request body to match the queue item
         let final_body = rewrite_model_field(&body_bytes, &model_id);
 
-        let url = format!("{}{}", target_url.trim_end_matches('/'), stripped_path);
+        let url = smart_url_join(&target_url, &stripped_path);
         let reqwest_method = reqwest::Method::from_bytes(method.as_str().as_bytes())
             .unwrap_or(reqwest::Method::POST);
 
@@ -365,6 +365,28 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             }
         }
     }
+}
+
+/// 智能拼接 URL，避免路径重复
+/// 例如：
+/// - base: "https://api.example.com/v1", path: "/v1/chat/completions"
+///   → "https://api.example.com/v1/chat/completions"
+/// - base: "https://api.example.com", path: "/v1/chat/completions"
+///   → "https://api.example.com/v1/chat/completions"
+fn smart_url_join(base: &str, path: &str) -> String {
+    let base_trimmed = base.trim_end_matches('/');
+
+    // 检查 path 的路径部分是否已经在 base 中存在
+    // 例如 base 以 "/v1" 结尾，path 以 "/v1" 开头
+    if let Some(stripped) = path.strip_prefix("/v1") {
+        if base_trimmed.ends_with("/v1") {
+            // 避免重复，去掉 path 的 "/v1" 前缀
+            return format!("{}{}", base_trimmed, stripped);
+        }
+    }
+
+    // 默认直接拼接
+    format!("{}{}", base_trimmed, path)
 }
 
 /// 将请求体 JSON 中的 "model" 字段替换为队列指定的 model_id
@@ -691,6 +713,38 @@ mod tests {
             assert_eq!(headers.get("authorization").unwrap(), "Bearer test-key");
             assert!(!headers.contains_key("x-api-key"));
             assert_eq!(headers.get("anthropic-version").unwrap(), "2023-06-01");
+        }
+    }
+
+    mod smart_url_join {
+        use super::super::smart_url_join;
+
+        #[test]
+        fn avoids_duplicate_v1_prefix() {
+            // base 已包含 /v1，path 也以 /v1 开头 → 去掉 path 的 /v1
+            let result = smart_url_join("https://api.example.com/v1", "/v1/chat/completions");
+            assert_eq!(result, "https://api.example.com/v1/chat/completions");
+        }
+
+        #[test]
+        fn normal_join_when_base_missing_v1() {
+            // base 不含 /v1 → 直接拼接
+            let result = smart_url_join("https://api.example.com", "/v1/chat/completions");
+            assert_eq!(result, "https://api.example.com/v1/chat/completions");
+        }
+
+        #[test]
+        fn handles_trailing_slash() {
+            // base 有尾部斜杠 → 先去掉再拼接
+            let result = smart_url_join("https://api.example.com/v1/", "/v1/chat/completions");
+            assert_eq!(result, "https://api.example.com/v1/chat/completions");
+        }
+
+        #[test]
+        fn handles_messages_path() {
+            // Anthropic messages 路径
+            let result = smart_url_join("https://api.anthropic.com/v1", "/v1/messages");
+            assert_eq!(result, "https://api.anthropic.com/v1/messages");
         }
     }
 }

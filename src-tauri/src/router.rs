@@ -304,9 +304,11 @@ mod tests {
                 id: model_id.to_owned(),
                 name: model_id.to_owned(),
                 enabled: true,
+                is_custom: false,
             }],
             enabled: true,
             priority: 100,
+            is_custom: false,
         }
     }
 
