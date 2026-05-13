@@ -1,18 +1,7 @@
-use crate::config::{AppConfig, Provider, QueueItem, RetryConfig};
+use crate::config::{AppConfig, AppMapping, Provider, Queue, QueueItem, RetryConfig};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-
-#[derive(Debug, Clone)]
-pub struct RouterState {
-    pub active_idx: usize,
-    pub queue: Vec<QueueItem>,
-    pub providers: Vec<Provider>,
-    pub retry: RetryConfig,
-    pub fail_counts: Vec<u32>,
-    pub exhausted_indices: Vec<usize>,
-    pub auth_map: HashMap<String, String>,
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FailureAction {
@@ -21,101 +10,194 @@ pub enum FailureAction {
     Exhausted,
 }
 
-impl RouterState {
-    pub fn from_config(cfg: &AppConfig) -> Self {
-        let n = cfg.queue.len();
+#[derive(Debug, Clone)]
+pub struct QueueState {
+    pub active_idx: usize,
+    pub items: Vec<QueueItem>,
+    pub fail_counts: Vec<u32>,
+    pub exhausted_indices: Vec<usize>,
+}
+
+impl QueueState {
+    pub fn from_items(items: Vec<QueueItem>) -> Self {
+        let n = items.len();
         Self {
             active_idx: 0,
-            queue: cfg.queue.clone(),
-            providers: cfg.providers.clone(),
-            retry: cfg.retry.clone(),
+            items,
             fail_counts: vec![0; n],
             exhausted_indices: vec![],
+        }
+    }
+
+    pub fn is_exhausted(&self) -> bool {
+        self.exhausted_indices.len() >= self.items.len()
+    }
+
+    pub fn get_active_entry(&self) -> Option<(usize, &QueueItem)> {
+        if self.items.is_empty() || self.is_exhausted() {
+            return None;
+        }
+        for i in self.active_idx..self.items.len() {
+            if !self.exhausted_indices.contains(&i) {
+                return Some((i, &self.items[i]));
+            }
+        }
+        for i in 0..self.active_idx {
+            if !self.exhausted_indices.contains(&i) {
+                return Some((i, &self.items[i]));
+            }
+        }
+        None
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct QueueStateInfo {
+    pub active_idx: usize,
+    pub exhausted_indices: Vec<usize>,
+    pub items: Vec<QueueItem>,
+}
+
+#[derive(Debug, Clone)]
+pub struct RouterState {
+    pub queues: HashMap<String, QueueState>,
+    pub providers: Vec<Provider>,
+    pub retry: RetryConfig,
+    pub auth_map: HashMap<String, String>,
+    pub app_mapping: Vec<AppMapping>,
+    pub default_queue_id: String,
+}
+
+impl RouterState {
+    pub fn from_config(cfg: &AppConfig) -> Self {
+        let queues: HashMap<String, QueueState> = cfg
+            .queues
+            .iter()
+            .map(|(id, queue)| (id.clone(), QueueState::from_items(queue.items.clone())))
+            .collect();
+        Self {
+            queues,
+            providers: cfg.providers.clone(),
+            retry: cfg.retry.clone(),
             auth_map: HashMap::new(),
+            app_mapping: cfg.app_mapping.clone(),
+            default_queue_id: cfg.default_queue_id.clone(),
         }
     }
 
     pub fn from_config_with_auth(cfg: &AppConfig, auth: HashMap<String, String>) -> Self {
-        let n = cfg.queue.len();
+        let queues: HashMap<String, QueueState> = cfg
+            .queues
+            .iter()
+            .map(|(id, queue)| (id.clone(), QueueState::from_items(queue.items.clone())))
+            .collect();
         Self {
-            active_idx: 0,
-            queue: cfg.queue.clone(),
+            queues,
             providers: cfg.providers.clone(),
             retry: cfg.retry.clone(),
-            fail_counts: vec![0; n],
-            exhausted_indices: vec![],
             auth_map: auth,
+            app_mapping: cfg.app_mapping.clone(),
+            default_queue_id: cfg.default_queue_id.clone(),
         }
     }
 
     pub fn replace_config(&mut self, cfg: &AppConfig) {
-        let n = cfg.queue.len();
-        self.active_idx = 0;
-        self.queue = cfg.queue.clone();
+        self.queues = cfg
+            .queues
+            .iter()
+            .map(|(id, queue)| (id.clone(), QueueState::from_items(queue.items.clone())))
+            .collect();
         self.providers = cfg.providers.clone();
         self.retry = cfg.retry.clone();
-        self.fail_counts = vec![0; n];
-        self.exhausted_indices = vec![];
-        // auth_map 保持不变
+        self.app_mapping = cfg.app_mapping.clone();
+        self.default_queue_id = cfg.default_queue_id.clone();
+        // auth_map stays unchanged
     }
 
     pub fn update_auth(&mut self, auth: HashMap<String, String>) {
         self.auth_map = auth;
     }
 
-    /// 获取指定 provider 的 api_key
     pub fn get_api_key(&self, provider_id: &str) -> Option<&str> {
         self.auth_map.get(provider_id).map(|s| s.as_str())
     }
 
-    /// 检查某个索引是否已用尽
-    pub fn is_exhausted(&self, idx: usize) -> bool {
-        self.exhausted_indices.contains(&idx)
-    }
-
-    /// 找到下一个未用尽的队列索引
-    fn find_next_available(&self, start_from: usize) -> Option<usize> {
-        for i in start_from..self.queue.len() {
-            if !self.is_exhausted(i) {
-                return Some(i);
+    /// Identify which queue to use based on request headers and path
+    pub fn identify_queue(&self, headers: &axum::http::HeaderMap, path: &str) -> String {
+        // 1. Check custom header: x-app-id
+        if let Some(app_id_val) = headers.get("x-app-id") {
+            if let Ok(app_id) = app_id_val.to_str() {
+                if let Some(mapping) = self.app_mapping.iter().find(|m| m.app_id == app_id) {
+                    return mapping.queue_id.clone();
+                }
             }
         }
-        None
+
+        // 2. Check match rules (User-Agent, headers, path)
+        let ua = headers
+            .get("user-agent")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+
+        for mapping in &self.app_mapping {
+            for rule in &mapping.match_rules {
+                if rule.matches(ua, headers, path) {
+                    return mapping.queue_id.clone();
+                }
+            }
+        }
+
+        // 3. Fall back to default queue
+        self.default_queue_id.clone()
     }
 
-    /// 返回当前队列项对应的 (provider, model_id)
-    pub fn active_entry(&self) -> Option<(&Provider, &str)> {
-        let item = self.queue.get(self.active_idx)?;
+    /// Get the active (Provider, model_id) for a given queue
+    pub fn active_entry_for_queue<'a>(
+        &'a self,
+        queue_id: &str,
+    ) -> Option<(&'a Provider, &'a str)> {
+        let queue_state = self.queues.get(queue_id)?;
+        let (_, item) = queue_state.get_active_entry()?;
         let provider = self.providers.iter().find(|p| p.id == item.provider_id)?;
         Some((provider, &item.model_id))
     }
 
-    /// 记录一次失败，返回路由器接下来应该重试、切换，还是结束重试。
-    /// 当达到 max_retries 时，将当前索引标记为已用尽，并切换到下一个可用索引。
-    pub fn record_failure(&mut self) -> FailureAction {
-        if self.queue.is_empty() {
+    /// Record a failure for the given queue, returns what action to take
+    pub fn record_failure_for_queue(&mut self, queue_id: &str) -> FailureAction {
+        let queue_state = match self.queues.get_mut(queue_id) {
+            Some(qs) => qs,
+            None => return FailureAction::Exhausted,
+        };
+
+        if queue_state.items.is_empty() {
             return FailureAction::Exhausted;
         }
-        let idx = self.active_idx;
-        if idx < self.fail_counts.len() {
-            self.fail_counts[idx] += 1;
-            if self.fail_counts[idx] > self.retry.max_retries {
-                self.fail_counts[idx] = 0;
-                // 将当前索引标记为已用尽，而不是改变队列顺序
-                if !self.exhausted_indices.contains(&idx) {
-                    self.exhausted_indices.push(idx);
+
+        let active_idx = queue_state.active_idx;
+        if active_idx < queue_state.fail_counts.len() {
+            queue_state.fail_counts[active_idx] += 1;
+            if queue_state.fail_counts[active_idx] > self.retry.max_retries {
+                queue_state.fail_counts[active_idx] = 0;
+                if !queue_state.exhausted_indices.contains(&active_idx) {
+                    queue_state.exhausted_indices.push(active_idx);
                 }
-                // 查找下一个可用的索引
-                let next = self.find_next_available(idx + 1);
-                if let Some(next_idx) = next {
-                    self.active_idx = next_idx;
-                    return FailureAction::SwitchProvider;
+
+                let items_len = queue_state.items.len();
+                let exhausted = queue_state.exhausted_indices.clone();
+
+                if exhausted.len() >= items_len {
+                    return FailureAction::Exhausted;
                 }
-                // 如果没有下一个可用，尝试从开头查找
-                let from_start = self.find_next_available(0);
-                if let Some(start_idx) = from_start {
-                    if start_idx != idx {
-                        self.active_idx = start_idx;
+
+                for i in (active_idx + 1)..items_len {
+                    if !exhausted.contains(&i) {
+                        queue_state.active_idx = i;
+                        return FailureAction::SwitchProvider;
+                    }
+                }
+                for i in 0..active_idx {
+                    if !exhausted.contains(&i) {
+                        queue_state.active_idx = i;
                         return FailureAction::SwitchProvider;
                     }
                 }
@@ -125,17 +207,65 @@ impl RouterState {
         FailureAction::RetryCurrent
     }
 
-    /// 重置所有用尽状态（例如用户手动重新激活）
-    pub fn reset_exhausted(&mut self) {
-        self.exhausted_indices.clear();
-        self.fail_counts = vec![0; self.queue.len()];
-        // 找到第一个可用索引作为活跃
-        self.active_idx = self.find_next_available(0).unwrap_or(0);
+    /// Reset exhausted state for a specific queue
+    pub fn reset_queue_exhausted(&mut self, queue_id: &str) {
+        if let Some(queue_state) = self.queues.get_mut(queue_id) {
+            queue_state.exhausted_indices.clear();
+            queue_state.fail_counts = vec![0; queue_state.items.len()];
+            queue_state.active_idx = 0;
+        }
     }
 
-    /// 获取已用尽的索引列表（用于前端显示）
+    /// Get state info for all queues
+    pub fn get_all_queue_states(&self) -> HashMap<String, QueueStateInfo> {
+        self.queues
+            .iter()
+            .map(|(id, q)| {
+                (
+                    id.clone(),
+                    QueueStateInfo {
+                        active_idx: q.active_idx,
+                        exhausted_indices: q.exhausted_indices.clone(),
+                        items: q.items.clone(),
+                    },
+                )
+            })
+            .collect()
+    }
+
+    // ── Backward-compatible shims (delegate to the default queue) ──────────
+
+    /// Returns (Provider, model_id) for the default queue's active entry.
+    pub fn active_entry(&self) -> Option<(&Provider, &str)> {
+        self.active_entry_for_queue(&self.default_queue_id)
+    }
+
+    /// Records a failure against the default queue.
+    pub fn record_failure(&mut self) -> FailureAction {
+        let queue_id = self.default_queue_id.clone();
+        self.record_failure_for_queue(&queue_id)
+    }
+
+    /// Resets exhausted state for the default queue.
+    pub fn reset_exhausted(&mut self) {
+        let queue_id = self.default_queue_id.clone();
+        self.reset_queue_exhausted(&queue_id);
+    }
+
+    /// Returns the exhausted indices for the default queue.
     pub fn get_exhausted_indices(&self) -> Vec<usize> {
-        self.exhausted_indices.clone()
+        self.queues
+            .get(&self.default_queue_id)
+            .map(|q| q.exhausted_indices.clone())
+            .unwrap_or_default()
+    }
+
+    /// Returns the active_idx for the default queue.
+    pub fn get_active_idx(&self) -> usize {
+        self.queues
+            .get(&self.default_queue_id)
+            .map(|q| q.active_idx)
+            .unwrap_or(0)
     }
 }
 
@@ -152,9 +282,9 @@ pub fn new_router_with_auth(cfg: &AppConfig, auth: HashMap<String, String>) -> S
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{Model, Protocol};
+    use crate::config::{AppMapping, MatchRule, MatchRuleType, Model, Protocol, Queue};
 
-    fn provider(id: &str, model_id: &str) -> Provider {
+    fn make_provider(id: &str, model_id: &str) -> Provider {
         Provider {
             id: id.to_owned(),
             name: id.to_owned(),
@@ -173,142 +303,142 @@ mod tests {
         }
     }
 
+    fn make_config(
+        providers: Vec<Provider>,
+        queues: HashMap<String, Queue>,
+        app_mapping: Vec<AppMapping>,
+    ) -> AppConfig {
+        AppConfig {
+            providers,
+            retry: RetryConfig::default(),
+            queues,
+            app_mapping,
+            default_queue_id: "default".to_string(),
+            queue: vec![],
+            port: 7860,
+        }
+    }
+
     #[test]
-    fn replace_config_resets_runtime_queue_and_fail_counts() {
-        let first = AppConfig {
-            providers: vec![provider("first", "model-a")],
-            retry: RetryConfig {
-                max_retries: 1,
-                retry_delay_secs: 1,
+    fn test_queue_state_from_items() {
+        let items = vec![
+            QueueItem { provider_id: "p1".to_owned(), model_id: "m1".to_owned() },
+            QueueItem { provider_id: "p2".to_owned(), model_id: "m2".to_owned() },
+        ];
+        let state = QueueState::from_items(items);
+        assert_eq!(state.active_idx, 0);
+        assert_eq!(state.fail_counts.len(), 2);
+        assert!(state.exhausted_indices.is_empty());
+    }
+
+    #[test]
+    fn test_multi_queue_router_state() {
+        let mut queues = HashMap::new();
+        queues.insert(
+            "default".to_string(),
+            Queue {
+                id: "default".to_string(),
+                name: "默认".to_string(),
+                items: vec![QueueItem { provider_id: "p1".to_owned(), model_id: "m1".to_owned() }],
             },
-            queue: vec![QueueItem {
-                provider_id: "first".to_owned(),
-                model_id: "model-a".to_owned(),
+        );
+        queues.insert(
+            "queue-2".to_string(),
+            Queue {
+                id: "queue-2".to_string(),
+                name: "队列2".to_string(),
+                items: vec![QueueItem { provider_id: "p2".to_owned(), model_id: "m2".to_owned() }],
+            },
+        );
+
+        let cfg = make_config(
+            vec![make_provider("p1", "m1"), make_provider("p2", "m2")],
+            queues,
+            vec![],
+        );
+
+        let router = RouterState::from_config(&cfg);
+        assert_eq!(router.queues.len(), 2);
+
+        let (p, m) = router.active_entry_for_queue("default").unwrap();
+        assert_eq!(p.id, "p1");
+        assert_eq!(m, "m1");
+    }
+
+    #[test]
+    fn test_identify_queue_with_user_agent() {
+        let mut queues = HashMap::new();
+        queues.insert(
+            "default".to_string(),
+            Queue { id: "default".to_string(), name: "默认".to_string(), items: vec![] },
+        );
+        queues.insert(
+            "queue-claude".to_string(),
+            Queue { id: "queue-claude".to_string(), name: "Claude".to_string(), items: vec![] },
+        );
+
+        let cfg = make_config(
+            vec![],
+            queues,
+            vec![AppMapping {
+                app_id: "claude-code".to_string(),
+                display_name: "Claude Code".to_string(),
+                match_rules: vec![MatchRule {
+                    rule_type: MatchRuleType::UserAgentContains,
+                    pattern: "claude-code".to_string(),
+                    header_name: None,
+                }],
+                queue_id: "queue-claude".to_string(),
             }],
-            port: 7860,
-        };
-        let second = AppConfig {
-            providers: vec![provider("second", "model-b"), provider("third", "model-c")],
-            retry: RetryConfig {
-                max_retries: 3,
-                retry_delay_secs: 2,
-            },
-            queue: vec![
-                QueueItem {
-                    provider_id: "second".to_owned(),
-                    model_id: "model-b".to_owned(),
-                },
-                QueueItem {
-                    provider_id: "third".to_owned(),
-                    model_id: "model-c".to_owned(),
-                },
-            ],
-            port: 7860,
-        };
+        );
 
-        let mut router = RouterState::from_config(&first);
-        router.fail_counts[0] = 1;
-        router.exhausted_indices.push(0);
-        router.replace_config(&second);
+        let router = RouterState::from_config(&cfg);
 
-        let (active_provider, active_model) = router.active_entry().unwrap();
-        assert_eq!(active_provider.id, "second");
-        assert_eq!(active_model, "model-b");
-        assert_eq!(router.retry.max_retries, 3);
-        assert_eq!(router.fail_counts, vec![0, 0]);
-        assert_eq!(router.exhausted_indices, Vec::<usize>::new());
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            "user-agent",
+            axum::http::HeaderValue::from_static("claude-code/1.0"),
+        );
+        assert_eq!(router.identify_queue(&headers, "/v1/messages"), "queue-claude");
+
+        let mut headers2 = axum::http::HeaderMap::new();
+        headers2.insert(
+            "user-agent",
+            axum::http::HeaderValue::from_static("other-app/1.0"),
+        );
+        assert_eq!(router.identify_queue(&headers2, "/v1/messages"), "default");
     }
 
     #[test]
-    fn record_failure_exhausts_when_no_next_provider_exists() {
-        let cfg = AppConfig {
-            providers: vec![provider("first", "model-a")],
-            retry: RetryConfig {
-                max_retries: 1,
-                retry_delay_secs: 1,
+    fn test_record_failure_switches_provider() {
+        let mut queues = HashMap::new();
+        queues.insert(
+            "default".to_string(),
+            Queue {
+                id: "default".to_string(),
+                name: "默认".to_string(),
+                items: vec![
+                    QueueItem { provider_id: "p1".to_owned(), model_id: "m1".to_owned() },
+                    QueueItem { provider_id: "p2".to_owned(), model_id: "m2".to_owned() },
+                ],
             },
-            queue: vec![QueueItem {
-                provider_id: "first".to_owned(),
-                model_id: "model-a".to_owned(),
-            }],
-            port: 7860,
-        };
+        );
+
+        let mut cfg = make_config(
+            vec![make_provider("p1", "m1"), make_provider("p2", "m2")],
+            queues,
+            vec![],
+        );
+        cfg.retry = RetryConfig { max_retries: 1, retry_delay_secs: 0 };
+
         let mut router = RouterState::from_config(&cfg);
 
-        assert_eq!(router.record_failure(), FailureAction::RetryCurrent);
-        assert_eq!(router.record_failure(), FailureAction::Exhausted);
-        assert_eq!(router.active_idx, 0);
-        // 第一个索引被标记为已用尽
-        assert!(router.is_exhausted(0));
-    }
-
-    #[test]
-    fn record_failure_marks_exhausted_and_moves_to_next() {
-        let cfg = AppConfig {
-            providers: vec![provider("first", "model-a"), provider("second", "model-b")],
-            retry: RetryConfig {
-                max_retries: 1,
-                retry_delay_secs: 1,
-            },
-            queue: vec![
-                QueueItem {
-                    provider_id: "first".to_owned(),
-                    model_id: "model-a".to_owned(),
-                },
-                QueueItem {
-                    provider_id: "second".to_owned(),
-                    model_id: "model-b".to_owned(),
-                },
-            ],
-            port: 7860,
-        };
-        let mut router = RouterState::from_config(&cfg);
-
-        // 第一项失败达到 max_retries
-        assert_eq!(router.record_failure(), FailureAction::RetryCurrent);
-        let action = router.record_failure();
-        assert_eq!(action, FailureAction::SwitchProvider);
-        // 第一项被标记为已用尽，但队列顺序不变
-        assert!(router.is_exhausted(0));
-        assert!(!router.is_exhausted(1));
-        // active_idx 移动到下一项
-        assert_eq!(router.active_idx, 1);
-        // 队列顺序不变
-        assert_eq!(router.queue.len(), 2);
-    }
-
-    #[test]
-    fn reset_exhausted_clears_all_states() {
-        let cfg = AppConfig {
-            providers: vec![provider("first", "model-a"), provider("second", "model-b")],
-            retry: RetryConfig {
-                max_retries: 1,
-                retry_delay_secs: 1,
-            },
-            queue: vec![
-                QueueItem {
-                    provider_id: "first".to_owned(),
-                    model_id: "model-a".to_owned(),
-                },
-                QueueItem {
-                    provider_id: "second".to_owned(),
-                    model_id: "model-b".to_owned(),
-                },
-            ],
-            port: 7860,
-        };
-        let mut router = RouterState::from_config(&cfg);
-
-        // 模拟第一项用尽
-        router.record_failure();
-        router.record_failure();
-        assert!(router.is_exhausted(0));
-        assert_eq!(router.active_idx, 1);
-
-        // 重置
-        router.reset_exhausted();
-        assert_eq!(router.exhausted_indices, Vec::<usize>::new());
-        assert_eq!(router.fail_counts, vec![0, 0]);
-        assert_eq!(router.active_idx, 0);
+        // First failure: retry
+        assert_eq!(router.record_failure_for_queue("default"), FailureAction::RetryCurrent);
+        // Second failure: switch (exceeds max_retries=1)
+        assert_eq!(router.record_failure_for_queue("default"), FailureAction::SwitchProvider);
+        // Now active is p2
+        let (p, _) = router.active_entry_for_queue("default").unwrap();
+        assert_eq!(p.id, "p2");
     }
 }

@@ -446,7 +446,7 @@ async fn get_exhausted_indices_cmd(
 async fn get_active_idx_cmd(
     router: tauri::State<'_, router::SharedRouter>,
 ) -> Result<usize, String> {
-    Ok(router.read().await.active_idx)
+    Ok(router.read().await.get_active_idx())
 }
 
 #[tauri::command]
