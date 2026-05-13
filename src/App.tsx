@@ -17,6 +17,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
+import { DraftQueuePanel } from "./components/DraftQueuePanel";
 import type { AppConfig, Provider, QueueItem, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
 import "./App.css";
 
@@ -463,6 +464,7 @@ export default function App() {
             onReorder={(queueId, items) => reorderQueue(queueId, items)}
             onRemove={(queueId, index) => removeFromQueue(queueId, index)}
             onResetExhausted={(queueId) => handleResetQueueExhausted(queueId)}
+            onOpenDraftPanel={openDraftPanel}
           />
         )}
         {currentPage === "logs" && (
@@ -522,6 +524,20 @@ export default function App() {
           onClose={() => setAddingModelProviderId(null)}
         />
       )}
+
+      <DraftQueuePanel
+        open={showDraftPanel}
+        queueName={draftQueueName}
+        items={draftItems}
+        providers={config.providers}
+        onQueueNameChange={setDraftQueueName}
+        onRemoveItem={removeFromDraft}
+        onClearAll={clearDraftItems}
+        onReorder={reorderDraftItems}
+        onSave={saveDraftQueue}
+        onCancel={cancelDraftPanel}
+        onClose={closeDraftPanel}
+      />
     </div>
   );
 }
