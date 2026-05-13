@@ -295,9 +295,7 @@ export default function App() {
 
     try {
       const newQueue = await createQueue(draftQueueName);
-      if (draftItems.length > 0) {
-        await updateQueue(newQueue.id, draftQueueName, draftItems);
-      }
+      await updateQueue(newQueue.id, draftQueueName, draftItems);
 
       setConfig((prev) =>
         prev
