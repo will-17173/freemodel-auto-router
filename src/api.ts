@@ -35,3 +35,12 @@ export const removeOpenclaw = (providerId: string): Promise<void> => invoke("rem
 export const getExhaustedIndices = (): Promise<number[]> => invoke("get_exhausted_indices_cmd");
 export const getActiveIdx = (): Promise<number> => invoke("get_active_idx_cmd");
 export const resetExhausted = (): Promise<void> => invoke("reset_exhausted_cmd");
+
+// Test connection
+export interface TestConnectionResult {
+  success: boolean;
+  message: string;
+  latency_ms: number | null;
+}
+export const testProviderConnection = (providerId: string): Promise<TestConnectionResult> =>
+  invoke("test_provider_connection_cmd", { providerId });

@@ -119,6 +119,7 @@ pub fn run() {
             save_auth_cmd,
             has_auth_cmd,
             get_all_auth_cmd,
+            test_provider_connection_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -478,4 +479,187 @@ fn has_auth_cmd(provider_id: String) -> bool {
 #[tauri::command]
 fn get_all_auth_cmd() -> std::collections::HashMap<String, bool> {
     auth::has_auth_map()
+}
+
+#[tauri::command]
+async fn test_provider_connection_cmd(
+    provider_id: String,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<TestConnectionResult, String> {
+    let (provider, api_key) = {
+        let r = router.read().await;
+        let provider = r.providers.iter().find(|p| p.id == provider_id)
+            .cloned()
+            .ok_or_else(|| format!("Provider '{}' not found", provider_id))?;
+        let api_key = r.get_api_key(&provider_id).unwrap_or_default().to_owned();
+        (provider, api_key)
+    };
+
+    if api_key.is_empty() {
+        return Err("API Key 未配置".to_string());
+    }
+
+    test_provider_connection(provider, api_key).await
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TestConnectionResult {
+    pub success: bool,
+    pub message: String,
+    pub latency_ms: Option<u64>,
+}
+
+async fn test_provider_connection(provider: config::Provider, api_key: String) -> Result<TestConnectionResult, String> {
+    use std::time::Instant;
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let start = Instant::now();
+
+    // 根据协议选择测试端点
+    match provider.protocol {
+        config::Protocol::Anthropic => {
+            // 使用 anthropic_url 测试 /v1/messages - 发送最小请求
+            let url = if provider.anthropic_url.is_empty() {
+                return Err("anthropic_url 未配置".to_string());
+            } else {
+                format!("{}{}", provider.anthropic_url.trim_end_matches('/'), "/v1/messages")
+            };
+
+            let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert("content-type", reqwest::header::HeaderValue::from_static("application/json"));
+
+            match provider.effective_auth_scheme() {
+                config::AuthScheme::Bearer => {
+                    if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", api_key)) {
+                        headers.insert("authorization", value);
+                    }
+                }
+                config::AuthScheme::ApiKey => {
+                    if let Ok(value) = reqwest::header::HeaderValue::from_str(&api_key) {
+                        headers.insert("x-api-key", value);
+                    }
+                }
+            }
+            headers.insert("anthropic-version", reqwest::header::HeaderValue::from_static("2023-06-01"));
+
+            // 发送最小请求测试连接
+            let test_body = serde_json::json!({
+                "model": provider.models.first().map(|m| m.id.as_str()).unwrap_or("claude-3-haiku-20240307"),
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "test"}]
+            });
+
+            let response = client
+                .post(&url)
+                .headers(headers)
+                .json(&test_body)
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    let latency_ms = start.elapsed().as_millis() as u64;
+
+                    if status == 200 || status == 201 {
+                        Ok(TestConnectionResult {
+                            success: true,
+                            message: "连接成功".to_string(),
+                            latency_ms: Some(latency_ms),
+                        })
+                    } else if status == 401 {
+                        Ok(TestConnectionResult {
+                            success: false,
+                            message: "API Key 无效".to_string(),
+                            latency_ms: Some(latency_ms),
+                        })
+                    } else if status == 429 {
+                        Ok(TestConnectionResult {
+                            success: false,
+                            message: "请求频率限制".to_string(),
+                            latency_ms: Some(latency_ms),
+                        })
+                    } else {
+                        let error_text = resp.text().await.unwrap_or_default();
+                        Ok(TestConnectionResult {
+                            success: false,
+                            message: format!("HTTP {}: {}", status, error_text.chars().take(100).collect::<String>()),
+                            latency_ms: Some(latency_ms),
+                        })
+                    }
+                }
+                Err(e) => {
+                    Ok(TestConnectionResult {
+                        success: false,
+                        message: format!("连接失败: {}", e),
+                        latency_ms: None,
+                    })
+                }
+            }
+        }
+        config::Protocol::OpenAI => {
+            // 使用 openai_url 测试 /v1/models 端点（更简单）
+            let url = if provider.openai_url.is_empty() {
+                return Err("openai_url 未配置".to_string());
+            } else {
+                format!("{}{}", provider.openai_url.trim_end_matches('/'), "/v1/models")
+            };
+
+            let mut headers = reqwest::header::HeaderMap::new();
+            if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", api_key)) {
+                headers.insert("authorization", value);
+            }
+
+            let response = client
+                .get(&url)
+                .headers(headers)
+                .send()
+                .await;
+
+            match response {
+                Ok(resp) => {
+                    let status = resp.status().as_u16();
+                    let latency_ms = start.elapsed().as_millis() as u64;
+
+                    if status == 200 {
+                        Ok(TestConnectionResult {
+                            success: true,
+                            message: "连接成功".to_string(),
+                            latency_ms: Some(latency_ms),
+                        })
+                    } else if status == 401 {
+                        Ok(TestConnectionResult {
+                            success: false,
+                            message: "API Key 无效".to_string(),
+                            latency_ms: Some(latency_ms),
+                        })
+                    } else if status == 429 {
+                        Ok(TestConnectionResult {
+                            success: false,
+                            message: "请求频率限制".to_string(),
+                            latency_ms: Some(latency_ms),
+                        })
+                    } else {
+                        let error_text = resp.text().await.unwrap_or_default();
+                        Ok(TestConnectionResult {
+                            success: false,
+                            message: format!("HTTP {}: {}", status, error_text.chars().take(100).collect::<String>()),
+                            latency_ms: Some(latency_ms),
+                        })
+                    }
+                }
+                Err(e) => {
+                    Ok(TestConnectionResult {
+                        success: false,
+                        message: format!("连接失败: {}", e),
+                        latency_ms: None,
+                    })
+                }
+            }
+        }
+    }
 }

@@ -1,4 +1,6 @@
+import React from "react";
 import type { Provider } from "../types";
+import { testProviderConnection, type TestConnectionResult } from "../api";
 
 interface Props {
   provider: Provider;
@@ -9,7 +11,26 @@ interface Props {
   onAddModel: (providerId: string) => void;
 }
 
+type TestStatus = "idle" | "testing" | "success" | "error";
+
 export function ProviderCard({ provider, hasKey, isActive, onAddToQueue, onConfigKey, onAddModel }: Props) {
+  const [testStatus, setTestStatus] = React.useState<TestStatus>("idle");
+  const [testResult, setTestResult] = React.useState<TestConnectionResult | null>(null);
+
+  const handleTest = async () => {
+    if (!hasKey) return;
+    setTestStatus("testing");
+    setTestResult(null);
+    try {
+      const result = await testProviderConnection(provider.id);
+      setTestResult(result);
+      setTestStatus(result.success ? "success" : "error");
+    } catch (e) {
+      setTestResult({ success: false, message: String(e), latency_ms: null });
+      setTestStatus("error");
+    }
+  };
+
   return (
     <div className={isActive ? "fm-card-active" : "fm-card"} style={{ position: "relative" }}>
       {isActive && (
@@ -43,8 +64,64 @@ export function ProviderCard({ provider, hasKey, isActive, onAddToQueue, onConfi
           </div>
         </div>
 
-        <button
-          onClick={() => onConfigKey(provider.id)}
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+          {/* Test connection button */}
+          <button
+            onClick={handleTest}
+            disabled={!hasKey || testStatus === "testing"}
+            title={!hasKey ? "请先配置 API Key" : "测试连接"}
+            style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: "32px", height: "32px",
+              borderRadius: "999px",
+              border: testStatus === "success" ? "1.5px solid var(--fm-success)" :
+                       testStatus === "error" ? "1.5px solid #ef4444" :
+                       "1.5px solid var(--fm-color-hairline)",
+              background: testStatus === "success" ? "rgba(34,197,94,0.1)" :
+                         testStatus === "error" ? "rgba(239,68,68,0.1)" :
+                         "var(--fm-color-surface-soft)",
+              color: testStatus === "success" ? "var(--fm-success)" :
+                     testStatus === "error" ? "#ef4444" :
+                     "var(--fm-color-ink)",
+              cursor: hasKey && testStatus !== "testing" ? "pointer" : "not-allowed",
+              opacity: hasKey ? 1 : 0.55,
+              transition: "all 0.2s",
+            }}
+            aria-label="测试连接"
+          >
+            {testStatus === "testing" ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ animation: "spin 1s linear infinite" }}>
+                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+              </svg>
+            ) : testStatus === "success" ? (
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 8l4 4 6-8"/>
+              </svg>
+            ) : testStatus === "error" ? (
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <path d="M4 4l8 8M12 4l-8 8"/>
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+              </svg>
+            )}
+          </button>
+
+          {/* Test result tooltip */}
+          {testResult && (
+            <span style={{
+              fontSize: "12px",
+              color: testResult.success ? "var(--fm-success)" : "#ef4444",
+              fontFamily: "var(--fm-font-mono)",
+              whiteSpace: "nowrap",
+            }}>
+              {testResult.latency_ms ? `${testResult.latency_ms}ms` : ""}
+            </span>
+          )}
+
+          <button
+            onClick={() => onConfigKey(provider.id)}
           style={hasKey ? {
             display: "inline-flex", alignItems: "center", gap: "5px",
             fontFamily: "var(--fm-font-sans)",
@@ -55,7 +132,7 @@ export function ProviderCard({ provider, hasKey, isActive, onAddToQueue, onConfi
             background: "var(--fm-color-surface-soft)",
             color: "var(--fm-color-ink)",
             cursor: "pointer",
-            flexShrink: 0, marginLeft: "8px",
+            flexShrink: 0,
           } : {
             display: "inline-flex", alignItems: "center", gap: "5px",
             fontFamily: "var(--fm-font-sans)",
@@ -66,7 +143,7 @@ export function ProviderCard({ provider, hasKey, isActive, onAddToQueue, onConfi
             background: "rgba(245,158,11,0.14)",
             color: "#fbbf24",
             cursor: "pointer",
-            flexShrink: 0, marginLeft: "8px",
+            flexShrink: 0,
           }}
           aria-label={hasKey ? "编辑 API Key" : "配置 API Key"}
         >
@@ -87,6 +164,7 @@ export function ProviderCard({ provider, hasKey, isActive, onAddToQueue, onConfi
             </>
           )}
         </button>
+        </div>
       </div>
 
       {/* Models section */}
