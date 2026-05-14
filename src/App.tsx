@@ -1,26 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { sendNotification } from "@tauri-apps/plugin-notification";
 import {
   getConfig, saveConfig, injectProxy, updateActive, restoreBackup, isInjected, restartProxy,
   injectCodex, removeCodex, injectHermes, removeHermes, isHermesInjected,
   injectOpenclaw, removeOpenclaw,
-  getQueueStates, resetQueueExhausted, createQueue, deleteQueue, updateQueue, setDefaultQueue,
-  getAuth, saveAuth, getAllAuth,
-  getProviders, saveCustomProvider, deleteCustomProvider,
-  addCustomModelToBuiltin, deleteCustomModelFromBuiltin,
+  getQueueStates, createQueue, deleteQueue, updateQueue, setDefaultQueue,
+  getAuth, saveAuth, getAllAuth, deleteProvider, deleteModel,
 } from "./api";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { ProvidersPage } from "./components/ProvidersPage";
-import { QueuePage } from "./components/QueuePage";
 import { LogsPage } from "./components/LogsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
 import { ToastProvider } from "./components/ui/toast";
-import type { AppConfig, Provider, Queue, QueueItem, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
+import type { AppConfig, Provider, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
 import "./App.css";
 
 function slugifyProviderName(name: string) {
@@ -48,7 +45,6 @@ function createProviderId(name: string, providers: Provider[]) {
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
-  const [providers, setProviders] = useState<Provider[]>([]);
   const [authMap, setAuthMap] = useState<Record<string, boolean>>({});  // provider_id -> hasKey
   const [currentPage, setCurrentPage] = useState<PageId>("providers");
   const [showAddProvider, setShowAddProvider] = useState(false);
@@ -61,17 +57,15 @@ export default function App() {
     openclaw: false,
   });
   const [queueStates, setQueueStates] = useState<Record<string, QueueStateInfo>>({});
-  const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
-  // Draft queue panel state
-  const [showDraftPanel, setShowDraftPanel] = useState(false);
-  const [draftQueueName, setDraftQueueName] = useState("");
-  const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
-  const isSavingDraftRef = useRef(false);
+  // Edit panel state
+  const [editPanelMode, setEditPanelMode] = useState<"new" | "edit" | null>(null);
+  const [editingQueueId, setEditingQueueId] = useState<string | null>(null);
+  const [editPanelName, setEditPanelName] = useState("");
+  const [editPanelItems, setEditPanelItems] = useState<DraftItem[]>([]);
 
   useEffect(() => {
     getConfig().then(setConfig);
-    getProviders().then(setProviders);
     getAllAuth().then(setAuthMap);
   }, []);
 
@@ -104,7 +98,6 @@ export default function App() {
   useEffect(() => {
     if (!config) return;
     getQueueStates().then(setQueueStates).catch(console.error);
-    setSelectedQueueId(config.default_queue_id);
   }, [config?.default_queue_id]);
 
   // 当代理已注入且队列首项（provider key 或 model）发生变化时，
@@ -114,7 +107,7 @@ export default function App() {
     const defaultQueue = config.queues[config.default_queue_id];
     const head = defaultQueue?.items[0];
     if (!head) return;
-    const provider = providers.find((p) => p.id === head.provider_id);
+    const provider = config.providers.find((p) => p.id === head.provider_id);
     if (!provider) return;
     if (!authMap[provider.id]) return;
     getAuth(provider.id).then((key) => {
@@ -137,7 +130,7 @@ export default function App() {
     const activeIdx = defaultQueueState?.active_idx ?? 0;
     const activeItem = defaultQueue?.items[activeIdx];
     const provider = activeItem
-      ? providers.find((p) => p.id === activeItem.provider_id)
+      ? config.providers.find((p) => p.id === activeItem.provider_id)
       : undefined;
     if (!provider) return;
     isHermesInjected(provider.id)
@@ -145,12 +138,10 @@ export default function App() {
       .catch(console.error);
   }, [config, queueStates]);
 
-  // Close draft panel when switching away from providers page
+  // Close edit panel when switching away from providers page
   useEffect(() => {
-    if (currentPage !== "providers") {
-      setShowDraftPanel(false);
-      setDraftItems([]);
-      setDraftQueueName("");
+    if (currentPage !== "providers" && editPanelMode) {
+      closeEditPanel();
     }
   }, [currentPage]);
 
@@ -169,147 +160,126 @@ export default function App() {
     getQueueStates().then(setQueueStates).catch(console.error);
   }
 
-  function addToQueue(providerId: string, modelId: string) {
+  // === 编辑面板操作 ===
+
+  function addToEditPanel(providerId: string, modelId: string) {
     if (!authMap[providerId]) return;  // 需要 API key 才能添加
-    if (!showDraftPanel) return;       // 只能在 DraftPanel 打开时添加
-    addToDraft(providerId, modelId);
-  }
-
-  function removeFromQueue(queueId: string, index: number) {
-    const queue = config!.queues[queueId];
-    if (!queue) return;
-    const newItems = queue.items.filter((_, i) => i !== index);
-    const updatedQueue = { ...queue, items: newItems };
-    updateAndSave({ ...config!, queues: { ...config!.queues, [queueId]: updatedQueue } });
-    // If default queue is now empty, turn off all injections
-    if (queueId === config!.default_queue_id && newItems.length === 0) {
-      if (appStates.cc) { restoreBackup().catch(console.error); }
-      if (appStates.codex) { removeCodex().catch(console.error); }
-      if (appStates.hermes && activeProvider) { removeHermes(activeProvider.id).catch(console.error); }
-      if (appStates.openclaw && activeProvider) { removeOpenclaw(activeProvider.id).catch(console.error); }
-      setAppStates({ cc: false, codex: false, hermes: false, openclaw: false });
-    }
-  }
-
-  function reorderQueue(queueId: string, newItems: QueueItem[]) {
-    const queue = config!.queues[queueId];
-    if (!queue) return;
-    const updatedQueue = { ...queue, items: newItems };
-    updateAndSave({ ...config!, queues: { ...config!.queues, [queueId]: updatedQueue } });
-  }
-
-  function handleDeleteQueue(queueId: string) {
-    deleteQueue(queueId).then(() => {
-      setConfig(prev => {
-        if (!prev) return prev;
-        const updatedQueues = { ...prev.queues };
-        delete updatedQueues[queueId];
-        return { ...prev, queues: updatedQueues };
-      });
-      setSelectedQueueId(prev => {
-        if (prev !== queueId) return prev;
-        const remaining = Object.keys(config!.queues).filter(id => id !== queueId);
-        return remaining[0] ?? null;
-      });
-    }).catch(console.error);
-  }
-
-  function handleResetQueueExhausted(queueId: string) {
-    resetQueueExhausted(queueId).then(() => {
-      getQueueStates().then(setQueueStates).catch(console.error);
-    }).catch(console.error);
-  }
-
-  function handleSetDefaultQueue(queueId: string) {
-    setDefaultQueue(queueId).then(() => {
-      setConfig(prev => prev ? { ...prev, default_queue_id: queueId } : prev);
-    }).catch(console.error);
-  }
-
-  function clearAndCloseDraft() {
-    setDraftItems([]);
-    setDraftQueueName("");
-    setShowDraftPanel(false);
-  }
-
-  function openDraftPanel() {
-    if (showDraftPanel) return; // already open, don't reset
-    const queueCount = Object.keys(config!.queues).length;
-    const defaultName = `队列 ${queueCount + 1}`;
-    setDraftQueueName(defaultName);
-    setDraftItems([]);
-    setShowDraftPanel(true);
-  }
-
-  function addToDraft(providerId: string, modelId: string) {
-    const exists = draftItems.some(
+    if (!editPanelMode) return;        // 面板未打开时不添加
+    const exists = editPanelItems.some(
       (item) => item.provider_id === providerId && item.model_id === modelId
     );
     if (exists) {
-      alert("该模型已存在于缓存区");
+      alert("该模型已存在于队列中");
       return;
     }
-    setDraftItems([...draftItems, { provider_id: providerId, model_id: modelId }]);
+    setEditPanelItems([...editPanelItems, { provider_id: providerId, model_id: modelId }]);
   }
 
-  function removeFromDraft(index: number) {
-    setDraftItems(draftItems.filter((_, i) => i !== index));
+  function openEditPanel(queueId: string) {
+    const queue = config!.queues[queueId];
+    if (!queue) return;
+    setEditPanelMode("edit");
+    setEditingQueueId(queueId);
+    setEditPanelName(queue.name);
+    setEditPanelItems(queue.items);
   }
 
-  function reorderDraftItems(newItems: DraftItem[]) {
-    setDraftItems(newItems);
+  function openNewPanel() {
+    const queueCount = Object.keys(config!.queues).length;
+    const defaultName = `队列 ${queueCount + 1}`;
+    setEditPanelMode("new");
+    setEditingQueueId(null);
+    setEditPanelName(defaultName);
+    setEditPanelItems([]);
   }
 
-  function clearDraftItems() {
-    setDraftItems([]);
+  function closeEditPanel() {
+    setEditPanelMode(null);
+    setEditingQueueId(null);
+    setEditPanelName("");
+    setEditPanelItems([]);
   }
 
-  function closeDraftPanel() {
-    clearAndCloseDraft();
+  function cancelEditPanel() {
+    closeEditPanel();
   }
 
-  function cancelDraftPanel() {
-    clearAndCloseDraft();
+  function removeFromEditPanel(index: number) {
+    setEditPanelItems(editPanelItems.filter((_, i) => i !== index));
   }
 
-  async function saveDraftQueue() {
-    if (isSavingDraftRef.current) return;
-    if (!draftQueueName.trim()) {
+  function reorderEditPanelItems(newItems: DraftItem[]) {
+    setEditPanelItems(newItems);
+  }
+
+  function clearEditPanelItems() {
+    setEditPanelItems([]);
+  }
+
+  async function saveEditPanel() {
+    if (!editPanelName.trim()) {
       alert("队列名不能为空");
       return;
     }
-    if (draftItems.length === 0) {
-      alert("缓存区为空，请添加至少一个模型");
+    if (editPanelItems.length === 0) {
+      alert("队列为空，请添加至少一个模型");
       return;
     }
 
-    isSavingDraftRef.current = true;
-    let newQueue: Queue | undefined;
     try {
-      newQueue = await createQueue(draftQueueName);
-      await updateQueue(newQueue.id, draftQueueName, draftItems);
-
-      setConfig((prev) =>
-        prev
-          ? {
-              ...prev,
-              queues: { ...prev.queues, [newQueue!.id]: { ...newQueue!, items: draftItems } },
-            }
-          : prev
-      );
-      setSelectedQueueId(newQueue.id);
-
-      clearAndCloseDraft();
-      alert(`队列 "${draftQueueName}" 创建成功`);
-    } catch (e) {
-      if (newQueue) {
-        deleteQueue(newQueue.id).catch(console.error);
+      if (editPanelMode === "new") {
+        const newQueue = await createQueue(editPanelName);
+        await updateQueue(newQueue.id, editPanelName, editPanelItems);
+        setConfig((prev) =>
+          prev
+            ? {
+                ...prev,
+                queues: { ...prev.queues, [newQueue.id]: { ...newQueue, items: editPanelItems } },
+              }
+            : prev
+        );
+        alert(`队列 "${editPanelName}" 创建成功`);
+      } else {
+        await updateQueue(editingQueueId!, editPanelName, editPanelItems);
+        setConfig((prev) =>
+          prev
+            ? {
+                ...prev,
+                queues: {
+                  ...prev.queues,
+                  [editingQueueId!]: { ...prev.queues[editingQueueId!], name: editPanelName, items: editPanelItems },
+                },
+              }
+            : prev
+        );
+        alert(`队列 "${editPanelName}" 已保存`);
       }
-      alert("创建队列失败");
+      closeEditPanel();
+    } catch (e) {
+      alert("保存失败");
       console.error(e);
-    } finally {
-      isSavingDraftRef.current = false;
     }
+  }
+
+  async function handleSetDefaultFromPanel() {
+    if (!editingQueueId) return;
+    await setDefaultQueue(editingQueueId);
+    setConfig((prev) => prev ? { ...prev, default_queue_id: editingQueueId } : prev);
+  }
+
+  async function handleDeleteQueueFromPanel() {
+    if (!editingQueueId) return;
+    const queue = config!.queues[editingQueueId];
+    if (!window.confirm(`确定删除队列 "${queue.name}"？`)) return;
+
+    await deleteQueue(editingQueueId);
+    setConfig((prev) => {
+      if (!prev) return prev;
+      const updatedQueues = { ...prev.queues };
+      delete updatedQueues[editingQueueId];
+      return { ...prev, queues: updatedQueues };
+    });
+    closeEditPanel();
   }
 
   async function saveApiKey(providerId: string, key: string) {
@@ -318,26 +288,12 @@ export default function App() {
   }
 
   function addModel(providerId: string, modelId: string) {
-    const provider = providers.find((p) => p.id === providerId);
-    if (!provider) return;
-
-    const newModel = { id: modelId, name: modelId, is_custom: true };
-
-    if (provider.is_custom) {
-      const updatedModels = [...provider.models, newModel];
-      saveCustomProvider({ ...provider, models: updatedModels }).then(() => {
-        setProviders((prev) =>
-          prev.map((p) => p.id === providerId ? { ...p, models: updatedModels } : p)
-        );
-      }).catch(console.error);
-    } else {
-      addCustomModelToBuiltin(providerId, newModel).then(() => {
-        setProviders((prev) =>
-          prev.map((p) => p.id === providerId ? { ...p, models: [...p.models, newModel] } : p)
-        );
-      }).catch(console.error);
-    }
-
+    const providers = config!.providers.map((p) =>
+      p.id !== providerId
+        ? p
+        : { ...p, models: [...p.models, { id: modelId, name: modelId, is_custom: true }] }
+    );
+    updateAndSave({ ...config!, providers });
     setAddingModelProviderId(null);
   }
 
@@ -386,7 +342,7 @@ export default function App() {
 
   async function addProvider(input: AddProviderPayload) {
     const nextProvider: Provider = {
-      id: createProviderId(input.name, providers),
+      id: createProviderId(input.name, config!.providers),
       name: input.name,
       anthropic_url: input.anthropicUrl,
       openai_url: input.openaiUrl,
@@ -398,12 +354,11 @@ export default function App() {
         name: modelId,
         is_custom: true,
       })),
-      priority: Math.max(0, ...providers.map((provider) => provider.priority)) + 1,
+      priority: Math.max(0, ...config!.providers.map((provider) => provider.priority)) + 1,
       is_custom: true,
     };
 
-    await saveCustomProvider(nextProvider);
-    setProviders((prev) => [...prev, nextProvider]);
+    updateAndSave({ ...config!, providers: [...config!.providers, nextProvider] });
     if (input.apiKey.trim().length > 0) {
       await saveAuth(nextProvider.id, input.apiKey);
       setAuthMap((prev) => ({ ...prev, [nextProvider.id]: true }));
@@ -411,15 +366,25 @@ export default function App() {
   }
 
   function handleDeleteProvider(providerId: string) {
-    deleteCustomProvider(providerId).then(() => {
-      setProviders((prev) => prev.filter((p) => p.id !== providerId));
+    deleteProvider(providerId).then(() => {
+      setConfig((prev) => {
+        if (!prev) return prev;
+        const updatedProviders = prev.providers.filter((p) => p.id !== providerId);
+        // 从所有队列中移除该供应商的项目
+        const updatedQueues = { ...prev.queues };
+        for (const queueId in updatedQueues) {
+          updatedQueues[queueId] = {
+            ...updatedQueues[queueId],
+            items: updatedQueues[queueId].items.filter((item) => item.provider_id !== providerId),
+          };
+        }
+        return { ...prev, providers: updatedProviders, queues: updatedQueues };
+      });
       setAuthMap((prev) => {
         const next = { ...prev };
         delete next[providerId];
         return next;
       });
-      // 后端已更新队列，重新加载 config 同步队列状态
-      getConfig().then(setConfig).catch(console.error);
     }).catch((e) => {
       alert(`删除失败: ${e}`);
       console.error(e);
@@ -427,39 +392,37 @@ export default function App() {
   }
 
   function handleDeleteModel(providerId: string, modelId: string) {
-    const provider = providers.find((p) => p.id === providerId);
-    if (!provider) return;
-
-    if (provider.is_custom) {
-      // 自定义供应商：保存整个 provider（含更新后的 models）
-      const updatedModels = provider.models.filter((m) => m.id !== modelId);
-      saveCustomProvider({ ...provider, models: updatedModels }).then(() => {
-        setProviders((prev) =>
-          prev.map((p) => p.id === providerId ? { ...p, models: updatedModels } : p)
-        );
-        // 后端已更新队列，重新加载 config
-        getConfig().then(setConfig).catch(console.error);
-      }).catch((e) => { alert(`删除失败: ${e}`); console.error(e); });
-    } else {
-      // 预设供应商的自定义模型
-      deleteCustomModelFromBuiltin(providerId, modelId).then(() => {
-        setProviders((prev) =>
-          prev.map((p) =>
-            p.id === providerId ? { ...p, models: p.models.filter((m) => m.id !== modelId) } : p
-          )
-        );
-        // 后端已更新队列，重新加载 config
-        getConfig().then(setConfig).catch(console.error);
-      }).catch((e) => { alert(`删除失败: ${e}`); console.error(e); });
-    }
+    deleteModel(providerId, modelId).then(() => {
+      setConfig((prev) => {
+        if (!prev) return prev;
+        const updatedProviders = prev.providers.map((p) => {
+          if (p.id !== providerId) return p;
+          return { ...p, models: p.models.filter((m) => m.id !== modelId) };
+        });
+        // 从所有队列中移除该模型
+        const updatedQueues = { ...prev.queues };
+        for (const queueId in updatedQueues) {
+          updatedQueues[queueId] = {
+            ...updatedQueues[queueId],
+            items: updatedQueues[queueId].items.filter(
+              (item) => item.provider_id !== providerId || item.model_id !== modelId
+            ),
+          };
+        }
+        return { ...prev, providers: updatedProviders, queues: updatedQueues };
+      });
+    }).catch((e) => {
+      alert(`删除失败: ${e}`);
+      console.error(e);
+    });
   }
 
   const editingKeyProvider = editingKeyProviderId
-    ? providers.find((p) => p.id === editingKeyProviderId) ?? null
+    ? config.providers.find((p) => p.id === editingKeyProviderId) ?? null
     : null;
 
   const addingModelProvider = addingModelProviderId
-    ? providers.find((p) => p.id === addingModelProviderId) ?? null
+    ? config.providers.find((p) => p.id === addingModelProviderId) ?? null
     : null;
 
   // Use default queue's active item for global status display
@@ -468,7 +431,7 @@ export default function App() {
   const defaultActiveIdx = defaultQueueState?.active_idx ?? 0;
   const activeQueueItem = defaultQueue?.items[defaultActiveIdx] ?? defaultQueue?.items[0];
   const activeProvider = activeQueueItem
-    ? providers.find((p) => p.id === activeQueueItem.provider_id)
+    ? config.providers.find((p) => p.id === activeQueueItem.provider_id)
     : undefined;
   const activeModel = activeProvider?.models.find((m) => m.id === activeQueueItem?.model_id);
   const isActive = !!(activeProvider && activeModel);
@@ -493,40 +456,35 @@ export default function App() {
         {/* Page content */}
         {currentPage === "providers" && (
           <ProvidersPage
-            providers={providers}
+            providers={config.providers}
             authMap={authMap}
-            onAddToQueue={addToQueue}
+            onAddToQueue={addToEditPanel}
             onConfigKey={(id) => setEditingKeyProviderId(id)}
             onAddModel={(id) => setAddingModelProviderId(id)}
             onAddProvider={() => setShowAddProvider(true)}
             onDeleteProvider={handleDeleteProvider}
             onDeleteModel={handleDeleteModel}
-            showDraftPanel={showDraftPanel}
-            draftQueueName={draftQueueName}
-            draftItems={draftItems}
-            onDraftQueueNameChange={setDraftQueueName}
-            onOpenDraftPanel={openDraftPanel}
-            onRemoveDraftItem={removeFromDraft}
-            onReorderDraftItems={reorderDraftItems}
-            onClearDraftItems={clearDraftItems}
-            onCloseDraftPanel={closeDraftPanel}
-            onCancelDraftPanel={cancelDraftPanel}
-            onSaveDraftQueue={saveDraftQueue}
-          />
-        )}
-        {currentPage === "queue" && (
-          <QueuePage
+            // 队列标签栏
             queues={config.queues}
             queueStates={queueStates}
-            providers={providers}
             defaultQueueId={config.default_queue_id}
-            selectedQueueId={selectedQueueId}
-            onSelectQueue={setSelectedQueueId}
-            onDeleteQueue={handleDeleteQueue}
-            onReorder={(queueId, items) => reorderQueue(queueId, items)}
-            onRemove={(queueId, index) => removeFromQueue(queueId, index)}
-            onResetExhausted={(queueId) => handleResetQueueExhausted(queueId)}
-            onSetDefault={handleSetDefaultQueue}
+            selectedQueueId={editingQueueId}
+            onSelectQueue={openEditPanel}
+            onNewQueue={openNewPanel}
+            // 编辑面板
+            editPanelMode={editPanelMode}
+            editPanelName={editPanelName}
+            editPanelItems={editPanelItems}
+            isDefaultQueue={editingQueueId === config.default_queue_id}
+            onEditPanelNameChange={setEditPanelName}
+            onRemoveEditPanelItem={removeFromEditPanel}
+            onReorderEditPanelItems={reorderEditPanelItems}
+            onClearEditPanelItems={clearEditPanelItems}
+            onCloseEditPanel={closeEditPanel}
+            onCancelEditPanel={cancelEditPanel}
+            onSaveEditPanel={saveEditPanel}
+            onSetDefaultFromPanel={handleSetDefaultFromPanel}
+            onDeleteQueueFromPanel={handleDeleteQueueFromPanel}
           />
         )}
         {currentPage === "logs" && (
@@ -544,7 +502,7 @@ export default function App() {
                   if (appStates.cc) {
                     const dq = next.queues[next.default_queue_id];
                     const head = dq?.items[0];
-                    const p = head ? providers.find((pr) => pr.id === head.provider_id) : undefined;
+                    const p = head ? next.providers.find((pr) => pr.id === head.provider_id) : undefined;
                     if (p) {
                       const apiKey = await getAuth(p.id);
                       if (apiKey && apiKey.trim().length > 0) {

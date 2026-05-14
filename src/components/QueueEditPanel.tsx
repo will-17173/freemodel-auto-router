@@ -19,11 +19,14 @@ import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import type { DraftItem, Provider } from "@/types"
 
-interface DraftQueuePanelProps {
+interface QueueEditPanelProps {
   open: boolean
+  mode: "new" | "edit"
+  queueId?: string
   queueName: string
   items: DraftItem[]
   providers: Provider[]
+  isDefaultQueue: boolean
   onQueueNameChange: (name: string) => void
   onRemoveItem: (index: number) => void
   onClearAll: () => void
@@ -31,6 +34,8 @@ interface DraftQueuePanelProps {
   onSave: () => void
   onCancel: () => void
   onClose: () => void
+  onSetDefault?: () => void
+  onDeleteQueue?: () => void
 }
 
 function SortableDraftItem({
@@ -73,11 +78,14 @@ function SortableDraftItem({
   )
 }
 
-export function DraftQueuePanel({
+export function QueueEditPanel({
   open,
+  mode,
+  queueId: _queueId,
   queueName,
   items,
   providers,
+  isDefaultQueue,
   onQueueNameChange,
   onRemoveItem,
   onClearAll,
@@ -85,7 +93,9 @@ export function DraftQueuePanel({
   onSave,
   onCancel,
   onClose,
-}: DraftQueuePanelProps) {
+  onSetDefault,
+  onDeleteQueue,
+}: QueueEditPanelProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
@@ -119,10 +129,11 @@ export function DraftQueuePanel({
       )}
     >
       <div className="flex flex-col h-full">
-        {/* Header */}
         <div className="p-4 border-b border-border">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-sm">新建队列</h2>
+            <h2 className="font-semibold text-sm">
+              {mode === "new" ? "新建队列" : "编辑队列"}
+            </h2>
             <button
               onClick={onClose}
               className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -141,10 +152,9 @@ export function DraftQueuePanel({
           </div>
         </div>
 
-        {/* List */}
         <div className="flex-1 overflow-auto p-4">
           <div className="text-xs font-medium text-muted-foreground mb-2">
-            缓存区 ({items.length} 项)
+            队列项 ({items.length} 项)
           </div>
           {items.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-8">
@@ -173,8 +183,27 @@ export function DraftQueuePanel({
           )}
         </div>
 
-        {/* Footer */}
         <div className="p-4 border-t border-border">
+          {mode === "edit" && !isDefaultQueue && (
+            <div className="flex items-center gap-2 mb-3">
+              {onSetDefault && (
+                <button
+                  onClick={onSetDefault}
+                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
+                >
+                  设为当前队列
+                </button>
+              )}
+              {onDeleteQueue && (
+                <button
+                  onClick={onDeleteQueue}
+                  className="text-xs text-muted-foreground hover:text-destructive transition-colors ml-auto"
+                >
+                  删除队列
+                </button>
+              )}
+            </div>
+          )}
           {items.length > 0 && (
             <button
               onClick={onClearAll}
@@ -188,7 +217,7 @@ export function DraftQueuePanel({
               取消
             </Button>
             <Button size="sm" className="flex-1" onClick={onSave}>
-              保存创建
+              {mode === "new" ? "保存创建" : "保存修改"}
             </Button>
           </div>
         </div>
