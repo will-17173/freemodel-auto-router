@@ -81,7 +81,7 @@ function SortableDraftItem({
 export function QueueEditPanel({
   open,
   mode,
-  queueId,
+  queueId: _queueId,
   queueName,
   items,
   providers,

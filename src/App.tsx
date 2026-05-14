@@ -1,24 +1,23 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { sendNotification } from "@tauri-apps/plugin-notification";
 import {
   getConfig, saveConfig, injectProxy, updateActive, restoreBackup, isInjected, restartProxy,
   injectCodex, removeCodex, injectHermes, removeHermes, isHermesInjected,
   injectOpenclaw, removeOpenclaw,
-  getQueueStates, resetQueueExhausted, createQueue, deleteQueue, updateQueue, setDefaultQueue,
+  getQueueStates, createQueue, deleteQueue, updateQueue, setDefaultQueue,
   getAuth, saveAuth, getAllAuth, deleteProvider, deleteModel,
 } from "./api";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { ProvidersPage } from "./components/ProvidersPage";
-import { QueuePage } from "./components/QueuePage";
 import { LogsPage } from "./components/LogsPage";
 import { SettingsPage } from "./components/SettingsPage";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
 import { ToastProvider } from "./components/ui/toast";
-import type { AppConfig, Provider, Queue, QueueItem, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
+import type { AppConfig, Provider, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
 import "./App.css";
 
 function slugifyProviderName(name: string) {
@@ -58,13 +57,12 @@ export default function App() {
     openclaw: false,
   });
   const [queueStates, setQueueStates] = useState<Record<string, QueueStateInfo>>({});
-  const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
-  // Draft queue panel state
-  const [showDraftPanel, setShowDraftPanel] = useState(false);
-  const [draftQueueName, setDraftQueueName] = useState("");
-  const [draftItems, setDraftItems] = useState<DraftItem[]>([]);
-  const isSavingDraftRef = useRef(false);
+  // Edit panel state
+  const [editPanelMode, setEditPanelMode] = useState<"new" | "edit" | null>(null);
+  const [editingQueueId, setEditingQueueId] = useState<string | null>(null);
+  const [editPanelName, setEditPanelName] = useState("");
+  const [editPanelItems, setEditPanelItems] = useState<DraftItem[]>([]);
 
   useEffect(() => {
     getConfig().then(setConfig);
@@ -100,7 +98,6 @@ export default function App() {
   useEffect(() => {
     if (!config) return;
     getQueueStates().then(setQueueStates).catch(console.error);
-    setSelectedQueueId(config.default_queue_id);
   }, [config?.default_queue_id]);
 
   // 当代理已注入且队列首项（provider key 或 model）发生变化时，
@@ -141,12 +138,10 @@ export default function App() {
       .catch(console.error);
   }, [config, queueStates]);
 
-  // Close draft panel when switching away from providers page
+  // Close edit panel when switching away from providers page
   useEffect(() => {
-    if (currentPage !== "providers") {
-      setShowDraftPanel(false);
-      setDraftItems([]);
-      setDraftQueueName("");
+    if (currentPage !== "providers" && editPanelMode) {
+      closeEditPanel();
     }
   }, [currentPage]);
 
@@ -165,147 +160,126 @@ export default function App() {
     getQueueStates().then(setQueueStates).catch(console.error);
   }
 
-  function addToQueue(providerId: string, modelId: string) {
+  // === 编辑面板操作 ===
+
+  function addToEditPanel(providerId: string, modelId: string) {
     if (!authMap[providerId]) return;  // 需要 API key 才能添加
-    if (!showDraftPanel) return;       // 只能在 DraftPanel 打开时添加
-    addToDraft(providerId, modelId);
-  }
-
-  function removeFromQueue(queueId: string, index: number) {
-    const queue = config!.queues[queueId];
-    if (!queue) return;
-    const newItems = queue.items.filter((_, i) => i !== index);
-    const updatedQueue = { ...queue, items: newItems };
-    updateAndSave({ ...config!, queues: { ...config!.queues, [queueId]: updatedQueue } });
-    // If default queue is now empty, turn off all injections
-    if (queueId === config!.default_queue_id && newItems.length === 0) {
-      if (appStates.cc) { restoreBackup().catch(console.error); }
-      if (appStates.codex) { removeCodex().catch(console.error); }
-      if (appStates.hermes && activeProvider) { removeHermes(activeProvider.id).catch(console.error); }
-      if (appStates.openclaw && activeProvider) { removeOpenclaw(activeProvider.id).catch(console.error); }
-      setAppStates({ cc: false, codex: false, hermes: false, openclaw: false });
-    }
-  }
-
-  function reorderQueue(queueId: string, newItems: QueueItem[]) {
-    const queue = config!.queues[queueId];
-    if (!queue) return;
-    const updatedQueue = { ...queue, items: newItems };
-    updateAndSave({ ...config!, queues: { ...config!.queues, [queueId]: updatedQueue } });
-  }
-
-  function handleDeleteQueue(queueId: string) {
-    deleteQueue(queueId).then(() => {
-      setConfig(prev => {
-        if (!prev) return prev;
-        const updatedQueues = { ...prev.queues };
-        delete updatedQueues[queueId];
-        return { ...prev, queues: updatedQueues };
-      });
-      setSelectedQueueId(prev => {
-        if (prev !== queueId) return prev;
-        const remaining = Object.keys(config!.queues).filter(id => id !== queueId);
-        return remaining[0] ?? null;
-      });
-    }).catch(console.error);
-  }
-
-  function handleResetQueueExhausted(queueId: string) {
-    resetQueueExhausted(queueId).then(() => {
-      getQueueStates().then(setQueueStates).catch(console.error);
-    }).catch(console.error);
-  }
-
-  function handleSetDefaultQueue(queueId: string) {
-    setDefaultQueue(queueId).then(() => {
-      setConfig(prev => prev ? { ...prev, default_queue_id: queueId } : prev);
-    }).catch(console.error);
-  }
-
-  function clearAndCloseDraft() {
-    setDraftItems([]);
-    setDraftQueueName("");
-    setShowDraftPanel(false);
-  }
-
-  function openDraftPanel() {
-    if (showDraftPanel) return; // already open, don't reset
-    const queueCount = Object.keys(config!.queues).length;
-    const defaultName = `队列 ${queueCount + 1}`;
-    setDraftQueueName(defaultName);
-    setDraftItems([]);
-    setShowDraftPanel(true);
-  }
-
-  function addToDraft(providerId: string, modelId: string) {
-    const exists = draftItems.some(
+    if (!editPanelMode) return;        // 面板未打开时不添加
+    const exists = editPanelItems.some(
       (item) => item.provider_id === providerId && item.model_id === modelId
     );
     if (exists) {
-      alert("该模型已存在于缓存区");
+      alert("该模型已存在于队列中");
       return;
     }
-    setDraftItems([...draftItems, { provider_id: providerId, model_id: modelId }]);
+    setEditPanelItems([...editPanelItems, { provider_id: providerId, model_id: modelId }]);
   }
 
-  function removeFromDraft(index: number) {
-    setDraftItems(draftItems.filter((_, i) => i !== index));
+  function openEditPanel(queueId: string) {
+    const queue = config!.queues[queueId];
+    if (!queue) return;
+    setEditPanelMode("edit");
+    setEditingQueueId(queueId);
+    setEditPanelName(queue.name);
+    setEditPanelItems(queue.items);
   }
 
-  function reorderDraftItems(newItems: DraftItem[]) {
-    setDraftItems(newItems);
+  function openNewPanel() {
+    const queueCount = Object.keys(config!.queues).length;
+    const defaultName = `队列 ${queueCount + 1}`;
+    setEditPanelMode("new");
+    setEditingQueueId(null);
+    setEditPanelName(defaultName);
+    setEditPanelItems([]);
   }
 
-  function clearDraftItems() {
-    setDraftItems([]);
+  function closeEditPanel() {
+    setEditPanelMode(null);
+    setEditingQueueId(null);
+    setEditPanelName("");
+    setEditPanelItems([]);
   }
 
-  function closeDraftPanel() {
-    clearAndCloseDraft();
+  function cancelEditPanel() {
+    closeEditPanel();
   }
 
-  function cancelDraftPanel() {
-    clearAndCloseDraft();
+  function removeFromEditPanel(index: number) {
+    setEditPanelItems(editPanelItems.filter((_, i) => i !== index));
   }
 
-  async function saveDraftQueue() {
-    if (isSavingDraftRef.current) return;
-    if (!draftQueueName.trim()) {
+  function reorderEditPanelItems(newItems: DraftItem[]) {
+    setEditPanelItems(newItems);
+  }
+
+  function clearEditPanelItems() {
+    setEditPanelItems([]);
+  }
+
+  async function saveEditPanel() {
+    if (!editPanelName.trim()) {
       alert("队列名不能为空");
       return;
     }
-    if (draftItems.length === 0) {
-      alert("缓存区为空，请添加至少一个模型");
+    if (editPanelItems.length === 0) {
+      alert("队列为空，请添加至少一个模型");
       return;
     }
 
-    isSavingDraftRef.current = true;
-    let newQueue: Queue | undefined;
     try {
-      newQueue = await createQueue(draftQueueName);
-      await updateQueue(newQueue.id, draftQueueName, draftItems);
-
-      setConfig((prev) =>
-        prev
-          ? {
-              ...prev,
-              queues: { ...prev.queues, [newQueue!.id]: { ...newQueue!, items: draftItems } },
-            }
-          : prev
-      );
-      setSelectedQueueId(newQueue.id);
-
-      clearAndCloseDraft();
-      alert(`队列 "${draftQueueName}" 创建成功`);
-    } catch (e) {
-      if (newQueue) {
-        deleteQueue(newQueue.id).catch(console.error);
+      if (editPanelMode === "new") {
+        const newQueue = await createQueue(editPanelName);
+        await updateQueue(newQueue.id, editPanelName, editPanelItems);
+        setConfig((prev) =>
+          prev
+            ? {
+                ...prev,
+                queues: { ...prev.queues, [newQueue.id]: { ...newQueue, items: editPanelItems } },
+              }
+            : prev
+        );
+        alert(`队列 "${editPanelName}" 创建成功`);
+      } else {
+        await updateQueue(editingQueueId!, editPanelName, editPanelItems);
+        setConfig((prev) =>
+          prev
+            ? {
+                ...prev,
+                queues: {
+                  ...prev.queues,
+                  [editingQueueId!]: { ...prev.queues[editingQueueId!], name: editPanelName, items: editPanelItems },
+                },
+              }
+            : prev
+        );
+        alert(`队列 "${editPanelName}" 已保存`);
       }
-      alert("创建队列失败");
+      closeEditPanel();
+    } catch (e) {
+      alert("保存失败");
       console.error(e);
-    } finally {
-      isSavingDraftRef.current = false;
     }
+  }
+
+  async function handleSetDefaultFromPanel() {
+    if (!editingQueueId) return;
+    await setDefaultQueue(editingQueueId);
+    setConfig((prev) => prev ? { ...prev, default_queue_id: editingQueueId } : prev);
+  }
+
+  async function handleDeleteQueueFromPanel() {
+    if (!editingQueueId) return;
+    const queue = config!.queues[editingQueueId];
+    if (!window.confirm(`确定删除队列 "${queue.name}"？`)) return;
+
+    await deleteQueue(editingQueueId);
+    setConfig((prev) => {
+      if (!prev) return prev;
+      const updatedQueues = { ...prev.queues };
+      delete updatedQueues[editingQueueId];
+      return { ...prev, queues: updatedQueues };
+    });
+    closeEditPanel();
   }
 
   async function saveApiKey(providerId: string, key: string) {
@@ -484,38 +458,33 @@ export default function App() {
           <ProvidersPage
             providers={config.providers}
             authMap={authMap}
-            onAddToQueue={addToQueue}
+            onAddToQueue={addToEditPanel}
             onConfigKey={(id) => setEditingKeyProviderId(id)}
             onAddModel={(id) => setAddingModelProviderId(id)}
             onAddProvider={() => setShowAddProvider(true)}
             onDeleteProvider={handleDeleteProvider}
             onDeleteModel={handleDeleteModel}
-            showDraftPanel={showDraftPanel}
-            draftQueueName={draftQueueName}
-            draftItems={draftItems}
-            onDraftQueueNameChange={setDraftQueueName}
-            onOpenDraftPanel={openDraftPanel}
-            onRemoveDraftItem={removeFromDraft}
-            onReorderDraftItems={reorderDraftItems}
-            onClearDraftItems={clearDraftItems}
-            onCloseDraftPanel={closeDraftPanel}
-            onCancelDraftPanel={cancelDraftPanel}
-            onSaveDraftQueue={saveDraftQueue}
-          />
-        )}
-        {currentPage === "queue" && (
-          <QueuePage
+            // 队列标签栏
             queues={config.queues}
             queueStates={queueStates}
-            providers={config.providers}
             defaultQueueId={config.default_queue_id}
-            selectedQueueId={selectedQueueId}
-            onSelectQueue={setSelectedQueueId}
-            onDeleteQueue={handleDeleteQueue}
-            onReorder={(queueId, items) => reorderQueue(queueId, items)}
-            onRemove={(queueId, index) => removeFromQueue(queueId, index)}
-            onResetExhausted={(queueId) => handleResetQueueExhausted(queueId)}
-            onSetDefault={handleSetDefaultQueue}
+            selectedQueueId={editingQueueId}
+            onSelectQueue={openEditPanel}
+            onNewQueue={openNewPanel}
+            // 编辑面板
+            editPanelMode={editPanelMode}
+            editPanelName={editPanelName}
+            editPanelItems={editPanelItems}
+            isDefaultQueue={editingQueueId === config.default_queue_id}
+            onEditPanelNameChange={setEditPanelName}
+            onRemoveEditPanelItem={removeFromEditPanel}
+            onReorderEditPanelItems={reorderEditPanelItems}
+            onClearEditPanelItems={clearEditPanelItems}
+            onCloseEditPanel={closeEditPanel}
+            onCancelEditPanel={cancelEditPanel}
+            onSaveEditPanel={saveEditPanel}
+            onSetDefaultFromPanel={handleSetDefaultFromPanel}
+            onDeleteQueueFromPanel={handleDeleteQueueFromPanel}
           />
         )}
         {currentPage === "logs" && (
