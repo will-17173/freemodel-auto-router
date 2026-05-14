@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, ProxyLogEntry, Model, Provider, Queue, AppMapping, QueueStateInfo, QueueItem } from "./types";
+import type { AppConfig, ProxyLogEntry, Model, Provider, Queue, AppMapping, QueueStateInfo, QueueItem, AppInstallations } from "./types";
 
 export const getConfig = (): Promise<AppConfig> => invoke("get_config");
 export const saveConfig = (cfg: AppConfig): Promise<void> => invoke("save_config_cmd", { cfg });
@@ -13,6 +13,7 @@ export const hasBackup = (): Promise<boolean> => invoke("has_backup_cmd");
 export const isInjected = (port: number): Promise<boolean> => invoke("is_injected_cmd", { port });
 export const getProxyLogs = (): Promise<ProxyLogEntry[]> => invoke("get_proxy_logs_cmd");
 export const restartProxy = (port: number): Promise<void> => invoke("restart_proxy_cmd", { port });
+export const detectAppInstallations = (): Promise<AppInstallations> => invoke("detect_app_installations_cmd");
 
 // Auth API
 export const getAuth = (providerId: string): Promise<string | null> => invoke("get_auth_cmd", { providerId });

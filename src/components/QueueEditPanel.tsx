@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
+import { queueItemKey } from "@/lib/queue"
 import type { DraftItem, Provider } from "@/types"
 
 interface QueueEditPanelProps {
@@ -26,7 +27,6 @@ interface QueueEditPanelProps {
   queueName: string
   items: DraftItem[]
   providers: Provider[]
-  isDefaultQueue: boolean
   onQueueNameChange: (name: string) => void
   onRemoveItem: (index: number) => void
   onClearAll: () => void
@@ -34,8 +34,6 @@ interface QueueEditPanelProps {
   onSave: () => void
   onCancel: () => void
   onClose: () => void
-  onSetDefault?: () => void
-  onDeleteQueue?: () => void
 }
 
 function SortableDraftItem({
@@ -60,7 +58,7 @@ function SortableDraftItem({
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
-      className="flex items-center gap-2 py-2 px-3 rounded-lg border border-border bg-card"
+      className="flex items-center gap-2 py-2 px-3 rounded-lg border border-border bg-card shadow-sm"
     >
       <span {...attributes} {...listeners} className="cursor-grab text-muted-foreground">
         <GripVertical className="h-3.5 w-3.5" />
@@ -85,7 +83,6 @@ export function QueueEditPanel({
   queueName,
   items,
   providers,
-  isDefaultQueue,
   onQueueNameChange,
   onRemoveItem,
   onClearAll,
@@ -93,8 +90,6 @@ export function QueueEditPanel({
   onSave,
   onCancel,
   onClose,
-  onSetDefault,
-  onDeleteQueue,
 }: QueueEditPanelProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
@@ -108,7 +103,7 @@ export function QueueEditPanel({
     return `${providerName} / ${modelName}`
   }
 
-  const ids = items.map((item) => `${item.provider_id}::${item.model_id}`)
+  const ids = items.map(queueItemKey)
 
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event
@@ -123,13 +118,13 @@ export function QueueEditPanel({
   return (
     <div
       className={cn(
-        "fixed right-0 top-12 bottom-0 w-[280px] border-l border-border bg-background shadow-xl z-40",
+        "fixed right-0 top-12 bottom-0 w-[280px] border-l border-border bg-[var(--fm-surface-wash)] shadow-2xl z-40",
         "transition-transform duration-300 ease-in-out",
         open ? "translate-x-0" : "translate-x-full"
       )}
     >
       <div className="flex flex-col h-full">
-        <div className="p-4 border-b border-border">
+        <div className="p-4 border-b border-border bg-card">
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-sm">
               {mode === "new" ? "新建队列" : "编辑队列"}
@@ -183,27 +178,7 @@ export function QueueEditPanel({
           )}
         </div>
 
-        <div className="p-4 border-t border-border">
-          {mode === "edit" && !isDefaultQueue && (
-            <div className="flex items-center gap-2 mb-3">
-              {onSetDefault && (
-                <button
-                  onClick={onSetDefault}
-                  className="text-xs text-muted-foreground hover:text-primary transition-colors"
-                >
-                  设为当前队列
-                </button>
-              )}
-              {onDeleteQueue && (
-                <button
-                  onClick={onDeleteQueue}
-                  className="text-xs text-muted-foreground hover:text-destructive transition-colors ml-auto"
-                >
-                  删除队列
-                </button>
-              )}
-            </div>
-          )}
+        <div className="p-4 border-t border-border bg-card">
           {items.length > 0 && (
             <button
               onClick={onClearAll}

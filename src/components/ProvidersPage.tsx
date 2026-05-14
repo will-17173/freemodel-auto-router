@@ -26,6 +26,15 @@ function canDeleteModel(provider: Provider, model: { id: string; is_custom?: boo
   return false
 }
 
+function splitModelDisplayName(name: string): { vendor: string | null; modelName: string } {
+  const separatorIndex = name.indexOf(":") > 0 ? name.indexOf(":") : name.indexOf("/")
+  if (separatorIndex <= 0) return { vendor: null, modelName: name.trim() }
+
+  const vendor = name.slice(0, separatorIndex).trim()
+  const modelName = name.slice(separatorIndex + 1).trim()
+  return { vendor, modelName: modelName || name.trim() }
+}
+
 interface ProvidersPageProps {
   providers: Provider[]
   authMap: Record<string, boolean>
@@ -41,12 +50,13 @@ interface ProvidersPageProps {
   defaultQueueId: string
   selectedQueueId: string | null
   onSelectQueue: (queueId: string) => void
+  onSetDefaultQueue: (queueId: string) => void
+  onDeleteQueue: (queueId: string) => void
   onNewQueue: () => void
   // 编辑面板
   editPanelMode: "new" | "edit" | null
   editPanelName: string
   editPanelItems: DraftItem[]
-  isDefaultQueue: boolean
   onEditPanelNameChange: (name: string) => void
   onRemoveEditPanelItem: (index: number) => void
   onReorderEditPanelItems: (items: DraftItem[]) => void
@@ -54,8 +64,7 @@ interface ProvidersPageProps {
   onCloseEditPanel: () => void
   onCancelEditPanel: () => void
   onSaveEditPanel: () => void
-  onSetDefaultFromPanel?: () => void
-  onDeleteQueueFromPanel?: () => void
+  onTrackEvent?: (eventName: string, params?: Record<string, string | number | boolean | null | undefined>) => void
 }
 
 export function ProvidersPage({
@@ -73,12 +82,13 @@ export function ProvidersPage({
   defaultQueueId,
   selectedQueueId,
   onSelectQueue,
+  onSetDefaultQueue,
+  onDeleteQueue,
   onNewQueue,
   // 编辑面板
   editPanelMode,
   editPanelName,
   editPanelItems,
-  isDefaultQueue,
   onEditPanelNameChange,
   onRemoveEditPanelItem,
   onReorderEditPanelItems,
@@ -86,8 +96,7 @@ export function ProvidersPage({
   onCloseEditPanel,
   onCancelEditPanel,
   onSaveEditPanel,
-  onSetDefaultFromPanel,
-  onDeleteQueueFromPanel,
+  onTrackEvent,
 }: ProvidersPageProps) {
   // 测试连接状态管理
   const [testStates, setTestStates] = React.useState<Record<string, { status: TestStatus; result: TestConnectionResult | null }>>({})
@@ -122,6 +131,10 @@ export function ProvidersPage({
       if (!result.success) {
         showToast("error", result.message)
       }
+      onTrackEvent?.("provider_connection_tested", {
+        success: result.success,
+        has_latency: result.latency_ms !== null,
+      })
     } catch (e) {
       const errorMessage = String(e)
       setTestStates(prev => ({
@@ -129,6 +142,10 @@ export function ProvidersPage({
         [providerId]: { status: "error", result: { success: false, message: errorMessage, latency_ms: null } }
       }))
       showToast("error", errorMessage)
+      onTrackEvent?.("provider_connection_tested", {
+        success: false,
+        has_latency: false,
+      })
     }
   }
 
@@ -141,6 +158,8 @@ export function ProvidersPage({
         defaultQueueId={defaultQueueId}
         selectedQueueId={selectedQueueId}
         onSelectQueue={onSelectQueue}
+        onSetDefaultQueue={onSetDefaultQueue}
+        onDeleteQueue={onDeleteQueue}
         onNewQueue={onNewQueue}
       />
 
@@ -148,7 +167,7 @@ export function ProvidersPage({
       <div className="flex-1 flex overflow-hidden">
         {/* 供应商卡片网格 */}
         <div className={cn(
-          "flex-1 p-6 overflow-auto transition-[margin-right] duration-300 ease-out",
+          "flex-1 p-6 overflow-auto bg-background transition-[margin-right] duration-300 ease-out",
           editPanelMode && "mr-[280px]"
         )}>
           {/* Header */}
@@ -169,10 +188,10 @@ export function ProvidersPage({
               <div
                 key={provider.id}
                 className={cn(
-                  "bg-card rounded-xl border p-5 transition-all",
+                  "bg-card rounded-xl border p-5 transition-all shadow-[0_1px_2px_rgba(16,24,20,0.04),0_12px_28px_rgba(16,24,20,0.06)]",
                   authMap[provider.id]
-                    ? "border-primary/30 shadow-sm hover:border-primary/50 hover:shadow-md"
-                    : "border-border shadow-sm hover:border-primary/40 hover:shadow-md"
+                    ? "border-primary/25 hover:border-primary/45 hover:shadow-[0_1px_2px_rgba(16,24,20,0.04),0_18px_36px_rgba(16,24,20,0.09)]"
+                    : "border-border hover:border-primary/35 hover:shadow-[0_1px_2px_rgba(16,24,20,0.04),0_18px_36px_rgba(16,24,20,0.09)]"
                 )}
               >
                 {/* Card header */}
@@ -200,9 +219,9 @@ export function ProvidersPage({
                       className={cn(
                         "flex items-center justify-center w-7 h-7 rounded-full border transition-colors",
                         testStates[provider.id]?.status === "success"
-                          ? "border-green-500/50 bg-green-500/10 text-green-600"
+                          ? "border-[color:var(--fm-success)] bg-[var(--fm-success-subtle)] text-[color:var(--fm-success-text)]"
                           : testStates[provider.id]?.status === "error"
-                            ? "border-red-500/50 bg-red-500/10 text-red-500"
+                            ? "border-destructive/50 bg-destructive/10 text-destructive"
                             : "border-border bg-muted/50 text-muted-foreground hover:border-primary hover:text-primary",
                         !authMap[provider.id] && "opacity-50 cursor-not-allowed"
                       )}
@@ -251,8 +270,9 @@ export function ProvidersPage({
                 {/* Models */}
                 {(() => {
                   const isExpanded = expandedProviders[provider.id]
-                  const needsCollapse = provider.models.length > MAX_VISIBLE_MODELS
-                  const visibleModels = isExpanded ? provider.models : provider.models.slice(0, MAX_VISIBLE_MODELS)
+                  const models = provider.models.filter((model) => (model.name.trim() || model.id.trim()).length > 0)
+                  const needsCollapse = models.length > MAX_VISIBLE_MODELS
+                  const visibleModels = isExpanded ? models : models.slice(0, MAX_VISIBLE_MODELS)
 
                   return (
                     <div className="relative">
@@ -260,33 +280,44 @@ export function ProvidersPage({
                         "flex flex-wrap gap-1.5 transition-all duration-200",
                         !isExpanded && needsCollapse && "max-h-[60px] overflow-hidden"
                       )}>
-                        {visibleModels.map((model) => (
+                        {visibleModels.map((model) => {
+                          const deletable = canDeleteModel(provider, model)
+                          const displayName = splitModelDisplayName(model.name)
+
+                          return (
                           <div key={model.id} className="flex items-center gap-1">
                             <button
                               disabled={!authMap[provider.id] || !editPanelMode}
                               onClick={() => authMap[provider.id] && editPanelMode && onAddToQueue(provider.id, model.id)}
                               className={cn(
-                                "text-xs px-2.5 py-1 rounded-full border transition-colors inline-flex items-center gap-1",
+                                "fm-model-pill",
                                 authMap[provider.id]
                                   ? editPanelMode
-                                    ? "border-[#22c55e]/40 bg-[#f0fce8] text-[#16a34a] hover:border-[#22c55e] hover:bg-[#dcfce7] cursor-pointer"
-                                    : "border-[#22c55e]/30 bg-[#f0fce8]/70 text-[#16a34a]/80 cursor-not-allowed"
-                                  : "border-border text-muted-foreground bg-muted/30 cursor-not-allowed opacity-60"
+                                    ? "is-ready"
+                                    : "is-locked"
+                                  : "is-disabled"
                               )}
                             >
-                              <span>{model.name}</span>
-                              {canDeleteModel(provider, model) && (
-                                <Trash2
-                                  className="h-3 w-3 opacity-50 hover:opacity-100 hover:text-destructive transition-opacity cursor-pointer"
+                              {displayName.vendor && (
+                                <span className="fm-model-pill-vendor">{displayName.vendor}</span>
+                              )}
+                              <span className="fm-model-pill-name">{displayName.modelName}</span>
+                              {deletable && (
+                                <span
+                                  className="fm-model-pill-action"
+                                  title="删除模型"
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     onDeleteModel(provider.id, model.id);
                                   }}
-                                />
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </span>
                               )}
                             </button>
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                       {/* 展开/收起按钮 */}
                       {needsCollapse && (
@@ -302,7 +333,7 @@ export function ProvidersPage({
                           ) : (
                             <>
                               <ChevronDown className="h-3.5 w-3.5" />
-                              展开 ({provider.models.length - MAX_VISIBLE_MODELS} 更多)
+                              展开 ({models.length - MAX_VISIBLE_MODELS} 更多)
                             </>
                           )}
                         </button>
@@ -323,7 +354,6 @@ export function ProvidersPage({
           queueName={editPanelName}
           items={editPanelItems}
           providers={providers}
-          isDefaultQueue={isDefaultQueue}
           onQueueNameChange={onEditPanelNameChange}
           onRemoveItem={onRemoveEditPanelItem}
           onClearAll={onClearEditPanelItems}
@@ -331,8 +361,6 @@ export function ProvidersPage({
           onSave={onSaveEditPanel}
           onCancel={onCancelEditPanel}
           onClose={onCloseEditPanel}
-          onSetDefault={onSetDefaultFromPanel}
-          onDeleteQueue={onDeleteQueueFromPanel}
         />
       </div>
     </div>

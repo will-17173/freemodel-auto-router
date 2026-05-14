@@ -1,13 +1,14 @@
+mod app_detection;
 mod auth;
 mod claude_settings;
 mod codex_settings;
+mod config;
 mod hermes_settings;
 mod openclaw_settings;
-mod config;
+mod providers;
 mod proxy;
 mod proxy_log;
 mod router;
-mod providers;
 
 use std::sync::Arc;
 use tauri::Manager;
@@ -63,7 +64,15 @@ pub fn run() {
             let notify_for_proxy = notify_tx.clone();
             let logs_for_proxy = proxy_logs_clone.clone();
             tauri::async_runtime::spawn(async move {
-                if let Err(e) = proxy::start_proxy(router_for_proxy, notify_for_proxy, logs_for_proxy, port, shutdown_rx).await {
+                if let Err(e) = proxy::start_proxy(
+                    router_for_proxy,
+                    notify_for_proxy,
+                    logs_for_proxy,
+                    port,
+                    shutdown_rx,
+                )
+                .await
+                {
                     log::error!("proxy error: {e}");
                 }
             });
@@ -76,8 +85,14 @@ pub fn run() {
                     if !payload_str.is_empty() {
                         if let Ok(json) = serde_json::from_str::<serde_json::Value>(&payload_str) {
                             let event_payload = ProviderSwitchedPayload {
-                                queue_id: json["queue_id"].as_str().unwrap_or("default").to_string(),
-                                provider_name: json["provider_name"].as_str().unwrap_or("").to_string(),
+                                queue_id: json["queue_id"]
+                                    .as_str()
+                                    .unwrap_or("default")
+                                    .to_string(),
+                                provider_name: json["provider_name"]
+                                    .as_str()
+                                    .unwrap_or("")
+                                    .to_string(),
                             };
                             use tauri::Emitter;
                             let _ = app_handle.emit("provider-switched", &event_payload);
@@ -163,6 +178,7 @@ pub fn run() {
             delete_custom_provider_cmd,
             add_custom_model_to_builtin_cmd,
             delete_custom_model_from_builtin_cmd,
+            detect_app_installations_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -174,6 +190,11 @@ pub fn run() {
 #[tauri::command]
 fn get_config() -> config::AppConfig {
     config::load_config()
+}
+
+#[tauri::command]
+fn detect_app_installations_cmd() -> app_detection::AppInstallations {
+    app_detection::detect_installations()
 }
 
 #[tauri::command]
@@ -197,7 +218,11 @@ fn inject_proxy_cmd(
             logs.push(
                 proxy_log::LogLevel::Info,
                 "Claude Code 注入已开启",
-                [("app", "Claude Code"), ("action", "inject"), ("port", &port.to_string())],
+                [
+                    ("app", "Claude Code"),
+                    ("action", "inject"),
+                    ("port", &port.to_string()),
+                ],
             );
             Ok(())
         }
@@ -205,7 +230,11 @@ fn inject_proxy_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Claude Code 注入失败: {e}"),
-                [("app", "Claude Code"), ("action", "inject"), ("error", &e.to_string())],
+                [
+                    ("app", "Claude Code"),
+                    ("action", "inject"),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -218,9 +247,7 @@ fn update_active_cmd(auth_token: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn remove_proxy_cmd(
-    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
-) -> Result<(), String> {
+fn remove_proxy_cmd(logs: tauri::State<'_, proxy_log::ProxyLogStore>) -> Result<(), String> {
     match claude_settings::remove_proxy() {
         Ok(()) => {
             logs.push(
@@ -234,7 +261,11 @@ fn remove_proxy_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Claude Code 注入关闭失败: {e}"),
-                [("app", "Claude Code"), ("action", "remove"), ("error", &e.to_string())],
+                [
+                    ("app", "Claude Code"),
+                    ("action", "remove"),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -242,9 +273,7 @@ fn remove_proxy_cmd(
 }
 
 #[tauri::command]
-fn restore_backup_cmd(
-    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
-) -> Result<(), String> {
+fn restore_backup_cmd(logs: tauri::State<'_, proxy_log::ProxyLogStore>) -> Result<(), String> {
     match claude_settings::restore_backup() {
         Ok(()) => {
             logs.push(
@@ -258,7 +287,11 @@ fn restore_backup_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Claude Code 配置恢复失败: {e}"),
-                [("app", "Claude Code"), ("action", "restore"), ("error", &e.to_string())],
+                [
+                    ("app", "Claude Code"),
+                    ("action", "restore"),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -306,7 +339,15 @@ async fn restart_proxy_cmd(
     let logs_clone = inner.proxy_logs.clone();
 
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = proxy::start_proxy(router_clone, notify_clone, logs_clone, port, new_shutdown_rx).await {
+        if let Err(e) = proxy::start_proxy(
+            router_clone,
+            notify_clone,
+            logs_clone,
+            port,
+            new_shutdown_rx,
+        )
+        .await
+        {
             log::error!("proxy restart error: {e}");
         }
     });
@@ -329,7 +370,12 @@ fn inject_codex_cmd(
             logs.push(
                 proxy_log::LogLevel::Info,
                 "Codex 注入已开启",
-                [("app", "Codex"), ("action", "inject"), ("provider_id", &provider_id), ("port", &port.to_string())],
+                [
+                    ("app", "Codex"),
+                    ("action", "inject"),
+                    ("provider_id", &provider_id),
+                    ("port", &port.to_string()),
+                ],
             );
             Ok(())
         }
@@ -337,7 +383,12 @@ fn inject_codex_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Codex 注入失败: {e}"),
-                [("app", "Codex"), ("action", "inject"), ("provider_id", &provider_id), ("error", &e.to_string())],
+                [
+                    ("app", "Codex"),
+                    ("action", "inject"),
+                    ("provider_id", &provider_id),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -345,9 +396,7 @@ fn inject_codex_cmd(
 }
 
 #[tauri::command]
-fn remove_codex_cmd(
-    logs: tauri::State<'_, proxy_log::ProxyLogStore>,
-) -> Result<(), String> {
+fn remove_codex_cmd(logs: tauri::State<'_, proxy_log::ProxyLogStore>) -> Result<(), String> {
     match codex_settings::remove() {
         Ok(()) => {
             logs.push(
@@ -361,7 +410,11 @@ fn remove_codex_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Codex 注入关闭失败: {e}"),
-                [("app", "Codex"), ("action", "remove"), ("error", &e.to_string())],
+                [
+                    ("app", "Codex"),
+                    ("action", "remove"),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -380,7 +433,12 @@ fn inject_hermes_cmd(
             logs.push(
                 proxy_log::LogLevel::Info,
                 "Hermes 注入已开启",
-                [("app", "Hermes"), ("action", "inject"), ("provider_id", &provider_id), ("port", &port.to_string())],
+                [
+                    ("app", "Hermes"),
+                    ("action", "inject"),
+                    ("provider_id", &provider_id),
+                    ("port", &port.to_string()),
+                ],
             );
             Ok(())
         }
@@ -388,7 +446,12 @@ fn inject_hermes_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Hermes 注入失败: {e}"),
-                [("app", "Hermes"), ("action", "inject"), ("provider_id", &provider_id), ("error", &e.to_string())],
+                [
+                    ("app", "Hermes"),
+                    ("action", "inject"),
+                    ("provider_id", &provider_id),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -405,7 +468,11 @@ fn remove_hermes_cmd(
             logs.push(
                 proxy_log::LogLevel::Info,
                 "Hermes 注入已关闭",
-                [("app", "Hermes"), ("action", "remove"), ("provider_id", &provider_id)],
+                [
+                    ("app", "Hermes"),
+                    ("action", "remove"),
+                    ("provider_id", &provider_id),
+                ],
             );
             Ok(())
         }
@@ -413,7 +480,12 @@ fn remove_hermes_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("Hermes 注入关闭失败: {e}"),
-                [("app", "Hermes"), ("action", "remove"), ("provider_id", &provider_id), ("error", &e.to_string())],
+                [
+                    ("app", "Hermes"),
+                    ("action", "remove"),
+                    ("provider_id", &provider_id),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -438,7 +510,12 @@ fn inject_openclaw_cmd(
             logs.push(
                 proxy_log::LogLevel::Info,
                 "OpenClaw 注入已开启",
-                [("app", "OpenClaw"), ("action", "inject"), ("provider_id", &provider_id), ("port", &port.to_string())],
+                [
+                    ("app", "OpenClaw"),
+                    ("action", "inject"),
+                    ("provider_id", &provider_id),
+                    ("port", &port.to_string()),
+                ],
             );
             Ok(())
         }
@@ -446,7 +523,12 @@ fn inject_openclaw_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("OpenClaw 注入失败: {e}"),
-                [("app", "OpenClaw"), ("action", "inject"), ("provider_id", &provider_id), ("error", &e.to_string())],
+                [
+                    ("app", "OpenClaw"),
+                    ("action", "inject"),
+                    ("provider_id", &provider_id),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -463,7 +545,11 @@ fn remove_openclaw_cmd(
             logs.push(
                 proxy_log::LogLevel::Info,
                 "OpenClaw 注入已关闭",
-                [("app", "OpenClaw"), ("action", "remove"), ("provider_id", &provider_id)],
+                [
+                    ("app", "OpenClaw"),
+                    ("action", "remove"),
+                    ("provider_id", &provider_id),
+                ],
             );
             Ok(())
         }
@@ -471,7 +557,12 @@ fn remove_openclaw_cmd(
             logs.push(
                 proxy_log::LogLevel::Error,
                 format!("OpenClaw 注入关闭失败: {e}"),
-                [("app", "OpenClaw"), ("action", "remove"), ("provider_id", &provider_id), ("error", &e.to_string())],
+                [
+                    ("app", "OpenClaw"),
+                    ("action", "remove"),
+                    ("provider_id", &provider_id),
+                    ("error", &e.to_string()),
+                ],
             );
             Err(e.to_string())
         }
@@ -500,7 +591,11 @@ fn get_auth_cmd(provider_id: String) -> Option<String> {
 }
 
 #[tauri::command]
-async fn save_auth_cmd(provider_id: String, api_key: String, router: tauri::State<'_, router::SharedRouter>) -> Result<(), String> {
+async fn save_auth_cmd(
+    provider_id: String,
+    api_key: String,
+    router: tauri::State<'_, router::SharedRouter>,
+) -> Result<(), String> {
     auth::save_api_key(&provider_id, &api_key).map_err(|e| e.to_string())?;
     // 更新 router 的 auth_map
     let auth_map = auth::load_auth();
@@ -510,7 +605,9 @@ async fn save_auth_cmd(provider_id: String, api_key: String, router: tauri::Stat
 
 #[tauri::command]
 fn has_auth_cmd(provider_id: String) -> bool {
-    auth::get_api_key(&provider_id).map(|k| k.trim().len() > 0).unwrap_or(false)
+    auth::get_api_key(&provider_id)
+        .map(|k| k.trim().len() > 0)
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -525,7 +622,10 @@ async fn test_provider_connection_cmd(
 ) -> Result<TestConnectionResult, String> {
     let (provider, api_key) = {
         let r = router.read().await;
-        let provider = r.providers.iter().find(|p| p.id == provider_id)
+        let provider = r
+            .providers
+            .iter()
+            .find(|p| p.id == provider_id)
             .cloned()
             .ok_or_else(|| format!("Provider '{}' not found", provider_id))?;
         let api_key = r.get_api_key(&provider_id).unwrap_or_default().to_owned();
@@ -567,10 +667,11 @@ async fn create_queue_cmd(
     };
 
     // Update router state
-    router.write().await.queues.insert(
-        id.clone(),
-        router::QueueState::from_items(vec![]),
-    );
+    router
+        .write()
+        .await
+        .queues
+        .insert(id.clone(), router::QueueState::from_items(vec![]));
 
     // Save config
     let mut cfg = config::load_config();
@@ -763,19 +864,25 @@ async fn delete_custom_model_from_builtin_cmd(
         }
     }
 
-    providers::delete_custom_model_from_builtin(&provider_id, &model_id).map_err(|e| e.to_string())?;
+    providers::delete_custom_model_from_builtin(&provider_id, &model_id)
+        .map_err(|e| e.to_string())?;
 
     // 从队列中移除
     let mut cfg = config::load_config();
     for queue in cfg.queues.values_mut() {
-        queue.items.retain(|item| item.provider_id != provider_id || item.model_id != model_id);
+        queue
+            .items
+            .retain(|item| item.provider_id != provider_id || item.model_id != model_id);
     }
     config::save_config(&cfg).map_err(|e| e.to_string())?;
 
     Ok(())
 }
 
-async fn test_provider_connection(provider: config::Provider, api_key: String) -> Result<TestConnectionResult, String> {
+async fn test_provider_connection(
+    provider: config::Provider,
+    api_key: String,
+) -> Result<TestConnectionResult, String> {
     use std::time::Instant;
 
     let client = reqwest::Client::builder()
@@ -792,15 +899,24 @@ async fn test_provider_connection(provider: config::Provider, api_key: String) -
             let url = if provider.anthropic_url.is_empty() {
                 return Err("anthropic_url 未配置".to_string());
             } else {
-                format!("{}{}", provider.anthropic_url.trim_end_matches('/'), "/v1/messages")
+                format!(
+                    "{}{}",
+                    provider.anthropic_url.trim_end_matches('/'),
+                    "/v1/messages"
+                )
             };
 
             let mut headers = reqwest::header::HeaderMap::new();
-            headers.insert("content-type", reqwest::header::HeaderValue::from_static("application/json"));
+            headers.insert(
+                "content-type",
+                reqwest::header::HeaderValue::from_static("application/json"),
+            );
 
             match provider.effective_auth_scheme() {
                 config::AuthScheme::Bearer => {
-                    if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", api_key)) {
+                    if let Ok(value) =
+                        reqwest::header::HeaderValue::from_str(&format!("Bearer {}", api_key))
+                    {
                         headers.insert("authorization", value);
                     }
                 }
@@ -810,7 +926,10 @@ async fn test_provider_connection(provider: config::Provider, api_key: String) -
                     }
                 }
             }
-            headers.insert("anthropic-version", reqwest::header::HeaderValue::from_static("2023-06-01"));
+            headers.insert(
+                "anthropic-version",
+                reqwest::header::HeaderValue::from_static("2023-06-01"),
+            );
 
             // 发送最小请求测试连接
             let test_body = serde_json::json!({
@@ -853,18 +972,20 @@ async fn test_provider_connection(provider: config::Provider, api_key: String) -
                         let error_text = resp.text().await.unwrap_or_default();
                         Ok(TestConnectionResult {
                             success: false,
-                            message: format!("HTTP {}: {}", status, error_text.chars().take(100).collect::<String>()),
+                            message: format!(
+                                "HTTP {}: {}",
+                                status,
+                                error_text.chars().take(100).collect::<String>()
+                            ),
                             latency_ms: Some(latency_ms),
                         })
                     }
                 }
-                Err(e) => {
-                    Ok(TestConnectionResult {
-                        success: false,
-                        message: format!("连接失败: {}", e),
-                        latency_ms: None,
-                    })
-                }
+                Err(e) => Ok(TestConnectionResult {
+                    success: false,
+                    message: format!("连接失败: {}", e),
+                    latency_ms: None,
+                }),
             }
         }
         config::Protocol::OpenAI => {
@@ -872,19 +993,21 @@ async fn test_provider_connection(provider: config::Provider, api_key: String) -
             let url = if provider.openai_url.is_empty() {
                 return Err("openai_url 未配置".to_string());
             } else {
-                format!("{}{}", provider.openai_url.trim_end_matches('/'), "/v1/models")
+                format!(
+                    "{}{}",
+                    provider.openai_url.trim_end_matches('/'),
+                    "/v1/models"
+                )
             };
 
             let mut headers = reqwest::header::HeaderMap::new();
-            if let Ok(value) = reqwest::header::HeaderValue::from_str(&format!("Bearer {}", api_key)) {
+            if let Ok(value) =
+                reqwest::header::HeaderValue::from_str(&format!("Bearer {}", api_key))
+            {
                 headers.insert("authorization", value);
             }
 
-            let response = client
-                .get(&url)
-                .headers(headers)
-                .send()
-                .await;
+            let response = client.get(&url).headers(headers).send().await;
 
             match response {
                 Ok(resp) => {
@@ -913,18 +1036,20 @@ async fn test_provider_connection(provider: config::Provider, api_key: String) -
                         let error_text = resp.text().await.unwrap_or_default();
                         Ok(TestConnectionResult {
                             success: false,
-                            message: format!("HTTP {}: {}", status, error_text.chars().take(100).collect::<String>()),
+                            message: format!(
+                                "HTTP {}: {}",
+                                status,
+                                error_text.chars().take(100).collect::<String>()
+                            ),
                             latency_ms: Some(latency_ms),
                         })
                     }
                 }
-                Err(e) => {
-                    Ok(TestConnectionResult {
-                        success: false,
-                        message: format!("连接失败: {}", e),
-                        latency_ms: None,
-                    })
-                }
+                Err(e) => Ok(TestConnectionResult {
+                    success: false,
+                    message: format!("连接失败: {}", e),
+                    latency_ms: None,
+                }),
             }
         }
     }

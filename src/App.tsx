@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { sendNotification } from "@tauri-apps/plugin-notification";
 import {
   getConfig, saveConfig, injectProxy, updateActive, restoreBackup, isInjected, restartProxy,
+  detectAppInstallations,
   injectCodex, removeCodex, injectHermes, removeHermes, isHermesInjected,
   injectOpenclaw, removeOpenclaw,
   getQueueStates, createQueue, deleteQueue, updateQueue, setDefaultQueue,
@@ -18,7 +19,9 @@ import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
 import { ToastProvider } from "./components/ui/toast";
-import type { AppConfig, Provider, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
+import { dedupeQueueItems } from "./lib/queue";
+import { trackEvent } from "./lib/analytics";
+import type { AppConfig, Provider, QueueStateInfo, ProviderSwitchedPayload, DraftItem, AppInstallations } from "./types";
 import "./App.css";
 
 function slugifyProviderName(name: string) {
@@ -59,6 +62,7 @@ export default function App() {
     openclaw: false,
   });
   const [queueStates, setQueueStates] = useState<Record<string, QueueStateInfo>>({});
+  const [appInstallations, setAppInstallations] = useState<AppInstallations | null>(null);
 
   // Edit panel state
   const [editPanelMode, setEditPanelMode] = useState<"new" | "edit" | null>(null);
@@ -66,10 +70,18 @@ export default function App() {
   const [editPanelName, setEditPanelName] = useState("");
   const [editPanelItems, setEditPanelItems] = useState<DraftItem[]>([]);
 
+  function handlePageChange(page: PageId) {
+    if (page !== currentPage) {
+      trackEvent("page_viewed", { page });
+    }
+    setCurrentPage(page);
+  }
+
   useEffect(() => {
     getConfig().then(setConfig);
     getProviders().then(setProviders);
     getAllAuth().then(setAuthMap);
+    detectAppInstallations().then(setAppInstallations).catch(console.error);
   }, []);
 
   useEffect(() => {
@@ -169,14 +181,19 @@ export default function App() {
   function addToEditPanel(providerId: string, modelId: string) {
     if (!authMap[providerId]) return;  // 需要 API key 才能添加
     if (!editPanelMode) return;        // 面板未打开时不添加
-    const exists = editPanelItems.some(
-      (item) => item.provider_id === providerId && item.model_id === modelId
-    );
-    if (exists) {
-      alert("该模型已存在于队列中");
-      return;
-    }
-    setEditPanelItems([...editPanelItems, { provider_id: providerId, model_id: modelId }]);
+    let duplicated = false;
+    setEditPanelItems((currentItems) => {
+      const exists = currentItems.some(
+        (item) => item.provider_id === providerId && item.model_id === modelId
+      );
+      if (exists) {
+        duplicated = true;
+        return currentItems;
+      }
+      trackEvent("queue_item_added");
+      return [...currentItems, { provider_id: providerId, model_id: modelId }];
+    });
+    if (duplicated) alert("该模型已存在于队列中");
   }
 
   function openEditPanel(queueId: string) {
@@ -185,7 +202,7 @@ export default function App() {
     setEditPanelMode("edit");
     setEditingQueueId(queueId);
     setEditPanelName(queue.name);
-    setEditPanelItems(queue.items);
+    setEditPanelItems(dedupeQueueItems(queue.items));
   }
 
   function openNewPanel() {
@@ -210,14 +227,17 @@ export default function App() {
 
   function removeFromEditPanel(index: number) {
     setEditPanelItems(editPanelItems.filter((_, i) => i !== index));
+    trackEvent("queue_item_removed");
   }
 
   function reorderEditPanelItems(newItems: DraftItem[]) {
-    setEditPanelItems(newItems);
+    setEditPanelItems(dedupeQueueItems(newItems));
+    trackEvent("queue_reordered", { item_count: newItems.length });
   }
 
   function clearEditPanelItems() {
     setEditPanelItems([]);
+    trackEvent("queue_cleared");
   }
 
   async function saveEditPanel() {
@@ -231,31 +251,34 @@ export default function App() {
     }
 
     try {
+      const savedItems = dedupeQueueItems(editPanelItems);
       if (editPanelMode === "new") {
         const newQueue = await createQueue(editPanelName);
-        await updateQueue(newQueue.id, editPanelName, editPanelItems);
+        await updateQueue(newQueue.id, editPanelName, savedItems);
         setConfig((prev) =>
           prev
             ? {
                 ...prev,
-                queues: { ...prev.queues, [newQueue.id]: { ...newQueue, items: editPanelItems } },
+                queues: { ...prev.queues, [newQueue.id]: { ...newQueue, items: savedItems } },
               }
             : prev
         );
+        trackEvent("queue_created", { item_count: savedItems.length });
         alert(`队列 "${editPanelName}" 创建成功`);
       } else {
-        await updateQueue(editingQueueId!, editPanelName, editPanelItems);
+        await updateQueue(editingQueueId!, editPanelName, savedItems);
         setConfig((prev) =>
           prev
             ? {
                 ...prev,
                 queues: {
                   ...prev.queues,
-                  [editingQueueId!]: { ...prev.queues[editingQueueId!], name: editPanelName, items: editPanelItems },
+                  [editingQueueId!]: { ...prev.queues[editingQueueId!], name: editPanelName, items: savedItems },
                 },
               }
             : prev
         );
+        trackEvent("queue_updated", { item_count: savedItems.length });
         alert(`队列 "${editPanelName}" 已保存`);
       }
       closeEditPanel();
@@ -265,36 +288,47 @@ export default function App() {
     }
   }
 
-  async function handleSetDefaultFromPanel() {
-    if (!editingQueueId) return;
-    await setDefaultQueue(editingQueueId);
-    setConfig((prev) => prev ? { ...prev, default_queue_id: editingQueueId } : prev);
+  async function handleSetDefaultQueue(queueId: string) {
+    if (queueId === config?.default_queue_id) return;
+    await setDefaultQueue(queueId);
+    setConfig((prev) => prev ? { ...prev, default_queue_id: queueId } : prev);
+    trackEvent("queue_default_changed");
   }
 
-  async function handleDeleteQueueFromPanel() {
-    if (!editingQueueId) return;
-    const queue = config!.queues[editingQueueId];
+  async function handleDeleteQueue(queueId: string) {
+    if (queueId === config?.default_queue_id) return;
+    const queue = config!.queues[queueId];
     if (!window.confirm(`确定删除队列 "${queue.name}"？`)) return;
 
-    await deleteQueue(editingQueueId);
+    await deleteQueue(queueId);
     setConfig((prev) => {
       if (!prev) return prev;
       const updatedQueues = { ...prev.queues };
-      delete updatedQueues[editingQueueId];
+      delete updatedQueues[queueId];
       return { ...prev, queues: updatedQueues };
     });
-    closeEditPanel();
+    if (editingQueueId === queueId) {
+      closeEditPanel();
+    }
+    trackEvent("queue_deleted");
   }
 
   async function saveApiKey(providerId: string, key: string) {
     await saveAuth(providerId, key);
     setAuthMap((prev) => ({ ...prev, [providerId]: key.trim().length > 0 }));
+    trackEvent("api_key_saved", {
+      provider_type: providers.find((provider) => provider.id === providerId)?.is_custom ? "custom" : "builtin",
+      has_key: key.trim().length > 0,
+    });
   }
 
   async function addModel(providerId: string, modelId: string) {
     await addCustomModelToBuiltin(providerId, { id: modelId, name: modelId, is_custom: true });
     setProviders(await getProviders());
     setAddingModelProviderId(null);
+    trackEvent("model_added", {
+      provider_type: providers.find((provider) => provider.id === providerId)?.is_custom ? "custom" : "builtin",
+    });
   }
 
   async function handleAppToggle(appId: string, enabled: boolean) {
@@ -302,18 +336,22 @@ export default function App() {
       if (enabled) {
         await injectProxy(config!.port, await getAuth(activeProvider!.id) || "");
         setAppStates(prev => ({ ...prev, cc: true }));
+        trackEvent("app_integration_toggled", { app_id: appId, enabled });
       } else {
         await restoreBackup();
         setAppStates(prev => ({ ...prev, cc: false }));
+        trackEvent("app_integration_toggled", { app_id: appId, enabled });
       }
     } else if (appId === "codex") {
       if (enabled) {
         const apiKey = await getAuth(activeProvider!.id) || "";
         await injectCodex(activeProvider!.id, apiKey, config!.port);
         setAppStates(prev => ({ ...prev, codex: true }));
+        trackEvent("app_integration_toggled", { app_id: appId, enabled });
       } else {
         await removeCodex();
         setAppStates(prev => ({ ...prev, codex: false }));
+        trackEvent("app_integration_toggled", { app_id: appId, enabled });
       }
     } else if (appId === "hermes") {
       try {
@@ -321,9 +359,11 @@ export default function App() {
           const apiKey = await getAuth(activeProvider!.id) || "";
           await injectHermes(activeProvider!.id, apiKey, config!.port);
           setAppStates(prev => ({ ...prev, hermes: true }));
+          trackEvent("app_integration_toggled", { app_id: appId, enabled });
         } else {
           await removeHermes(activeProvider!.id);
           setAppStates(prev => ({ ...prev, hermes: false }));
+          trackEvent("app_integration_toggled", { app_id: appId, enabled });
         }
       } catch (e) {
         console.error("Hermes 配置操作失败:", e);
@@ -333,9 +373,11 @@ export default function App() {
         const apiKey = await getAuth(activeProvider!.id) || "";
         await injectOpenclaw(activeProvider!.id, apiKey, activeProvider!.models, config!.port);
         setAppStates(prev => ({ ...prev, openclaw: true }));
+        trackEvent("app_integration_toggled", { app_id: appId, enabled });
       } else {
         await removeOpenclaw(activeProvider!.id);
         setAppStates(prev => ({ ...prev, openclaw: false }));
+        trackEvent("app_integration_toggled", { app_id: appId, enabled });
       }
     }
   }
@@ -364,6 +406,10 @@ export default function App() {
       await saveAuth(nextProvider.id, input.apiKey);
       setAuthMap((prev) => ({ ...prev, [nextProvider.id]: true }));
     }
+    trackEvent("provider_created", {
+      model_count: nextProvider.models.length,
+      dual_protocol: nextProvider.dual_protocol,
+    });
   }
 
   function handleDeleteProvider(providerId: string) {
@@ -390,6 +436,7 @@ export default function App() {
         delete next[providerId];
         return next;
       });
+      trackEvent("provider_deleted");
     }).catch((e) => {
       alert(`删除失败: ${e}`);
       console.error(e);
@@ -417,6 +464,7 @@ export default function App() {
         }
         return { ...prev, queues: updatedQueues };
       });
+      trackEvent("model_deleted");
     }).catch((e) => {
       alert(`删除失败: ${e}`);
       console.error(e);
@@ -445,9 +493,9 @@ export default function App() {
 
   return (
     <ToastProvider>
-    <div className="h-screen flex bg-background text-foreground">
+      <div className="h-screen flex bg-background text-foreground">
       {/* Sidebar */}
-      <Sidebar currentPage={currentPage} onPageChange={setCurrentPage} />
+      <Sidebar currentPage={currentPage} onPageChange={handlePageChange} />
 
       {/* Main content */}
       <div className="flex-1 flex flex-col overflow-hidden">
@@ -456,6 +504,7 @@ export default function App() {
           port={config.port}
           isActive={isActive}
           appStates={appStates}
+          appInstallations={appInstallations}
           onAppToggle={handleAppToggle}
         />
 
@@ -476,12 +525,13 @@ export default function App() {
             defaultQueueId={config.default_queue_id}
             selectedQueueId={editingQueueId}
             onSelectQueue={openEditPanel}
+            onSetDefaultQueue={handleSetDefaultQueue}
+            onDeleteQueue={handleDeleteQueue}
             onNewQueue={openNewPanel}
             // 编辑面板
             editPanelMode={editPanelMode}
             editPanelName={editPanelName}
             editPanelItems={editPanelItems}
-            isDefaultQueue={editingQueueId === config.default_queue_id}
             onEditPanelNameChange={setEditPanelName}
             onRemoveEditPanelItem={removeFromEditPanel}
             onReorderEditPanelItems={reorderEditPanelItems}
@@ -489,8 +539,7 @@ export default function App() {
             onCloseEditPanel={closeEditPanel}
             onCancelEditPanel={cancelEditPanel}
             onSaveEditPanel={saveEditPanel}
-            onSetDefaultFromPanel={handleSetDefaultFromPanel}
-            onDeleteQueueFromPanel={handleDeleteQueueFromPanel}
+            onTrackEvent={trackEvent}
           />
         )}
         {currentPage === "logs" && (
@@ -503,6 +552,11 @@ export default function App() {
             onSave={(retry, newPort, portChanged) => {
               const next = { ...config, retry, port: newPort };
               updateAndSave(next);
+              trackEvent("settings_saved", {
+                port_changed: portChanged,
+                max_retries: retry.max_retries,
+                retry_delay_secs: retry.retry_delay_secs,
+              });
               if (portChanged) {
                 restartProxy(newPort).then(async () => {
                   if (appStates.cc) {

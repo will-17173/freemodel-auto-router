@@ -50,9 +50,9 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               "flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg animate-in slide-in-from-right-5 fade-in",
               "text-sm max-w-[400px]",
               toast.type === "success"
-                ? "bg-green-500/90 text-white"
+                ? "bg-[var(--fm-success)] text-white"
                 : toast.type === "error"
-                  ? "bg-red-500/90 text-white"
+                  ? "bg-destructive text-destructive-foreground"
                   : "bg-primary/90 text-primary-foreground"
             )}
           >

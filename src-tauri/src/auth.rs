@@ -50,7 +50,6 @@ pub fn delete_api_key(provider_id: &str) -> Result<()> {
     save_auth(&auth)
 }
 
-
 /// 返回所有 provider_id 及是否有 key（不返回实际值）
 pub fn has_auth_map() -> HashMap<String, bool> {
     load_auth()

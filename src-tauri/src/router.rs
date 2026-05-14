@@ -185,10 +185,7 @@ impl RouterState {
     }
 
     /// Get the active (Provider, model_id) for a given queue
-    pub fn active_entry_for_queue<'a>(
-        &'a self,
-        queue_id: &str,
-    ) -> Option<(&'a Provider, &'a str)> {
+    pub fn active_entry_for_queue<'a>(&'a self, queue_id: &str) -> Option<(&'a Provider, &'a str)> {
         let queue_state = self.queues.get(queue_id)?;
         let (_, item) = queue_state.get_active_entry()?;
         let provider = self.providers.iter().find(|p| p.id == item.provider_id)?;
@@ -323,7 +320,9 @@ pub fn new_router_with_providers(
     providers: Vec<Provider>,
     auth: HashMap<String, String>,
 ) -> SharedRouter {
-    Arc::new(RwLock::new(RouterState::from_config_with_providers(cfg, providers, auth)))
+    Arc::new(RwLock::new(RouterState::from_config_with_providers(
+        cfg, providers, auth,
+    )))
 }
 
 #[cfg(test)]
@@ -352,10 +351,7 @@ mod tests {
         }
     }
 
-    fn make_config(
-        queues: HashMap<String, Queue>,
-        app_mapping: Vec<AppMapping>,
-    ) -> AppConfig {
+    fn make_config(queues: HashMap<String, Queue>, app_mapping: Vec<AppMapping>) -> AppConfig {
         AppConfig {
             retry: RetryConfig::default(),
             queues,
@@ -369,8 +365,14 @@ mod tests {
     #[test]
     fn test_queue_state_from_items() {
         let items = vec![
-            QueueItem { provider_id: "p1".to_owned(), model_id: "m1".to_owned() },
-            QueueItem { provider_id: "p2".to_owned(), model_id: "m2".to_owned() },
+            QueueItem {
+                provider_id: "p1".to_owned(),
+                model_id: "m1".to_owned(),
+            },
+            QueueItem {
+                provider_id: "p2".to_owned(),
+                model_id: "m2".to_owned(),
+            },
         ];
         let state = QueueState::from_items(items);
         assert_eq!(state.active_idx, 0);
@@ -386,7 +388,10 @@ mod tests {
             Queue {
                 id: "default".to_string(),
                 name: "默认".to_string(),
-                items: vec![QueueItem { provider_id: "p1".to_owned(), model_id: "m1".to_owned() }],
+                items: vec![QueueItem {
+                    provider_id: "p1".to_owned(),
+                    model_id: "m1".to_owned(),
+                }],
             },
         );
         queues.insert(
@@ -394,7 +399,10 @@ mod tests {
             Queue {
                 id: "queue-2".to_string(),
                 name: "队列2".to_string(),
-                items: vec![QueueItem { provider_id: "p2".to_owned(), model_id: "m2".to_owned() }],
+                items: vec![QueueItem {
+                    provider_id: "p2".to_owned(),
+                    model_id: "m2".to_owned(),
+                }],
             },
         );
 
@@ -414,11 +422,19 @@ mod tests {
         let mut queues = HashMap::new();
         queues.insert(
             "default".to_string(),
-            Queue { id: "default".to_string(), name: "默认".to_string(), items: vec![] },
+            Queue {
+                id: "default".to_string(),
+                name: "默认".to_string(),
+                items: vec![],
+            },
         );
         queues.insert(
             "queue-claude".to_string(),
-            Queue { id: "queue-claude".to_string(), name: "Claude".to_string(), items: vec![] },
+            Queue {
+                id: "queue-claude".to_string(),
+                name: "Claude".to_string(),
+                items: vec![],
+            },
         );
 
         let cfg = make_config(
@@ -442,7 +458,10 @@ mod tests {
             "user-agent",
             axum::http::HeaderValue::from_static("claude-code/1.0"),
         );
-        assert_eq!(router.identify_queue(&headers, "/v1/messages"), "queue-claude");
+        assert_eq!(
+            router.identify_queue(&headers, "/v1/messages"),
+            "queue-claude"
+        );
 
         let mut headers2 = axum::http::HeaderMap::new();
         headers2.insert(
@@ -461,22 +480,37 @@ mod tests {
                 id: "default".to_string(),
                 name: "默认".to_string(),
                 items: vec![
-                    QueueItem { provider_id: "p1".to_owned(), model_id: "m1".to_owned() },
-                    QueueItem { provider_id: "p2".to_owned(), model_id: "m2".to_owned() },
+                    QueueItem {
+                        provider_id: "p1".to_owned(),
+                        model_id: "m1".to_owned(),
+                    },
+                    QueueItem {
+                        provider_id: "p2".to_owned(),
+                        model_id: "m2".to_owned(),
+                    },
                 ],
             },
         );
 
         let providers = vec![make_provider("p1", "m1"), make_provider("p2", "m2")];
         let mut cfg = make_config(queues, vec![]);
-        cfg.retry = RetryConfig { max_retries: 1, retry_delay_secs: 0 };
+        cfg.retry = RetryConfig {
+            max_retries: 1,
+            retry_delay_secs: 0,
+        };
 
         let mut router = RouterState::from_config_with_providers(&cfg, providers, HashMap::new());
 
         // First failure: retry
-        assert_eq!(router.record_failure_for_queue("default"), FailureAction::RetryCurrent);
+        assert_eq!(
+            router.record_failure_for_queue("default"),
+            FailureAction::RetryCurrent
+        );
         // Second failure: switch (exceeds max_retries=1)
-        assert_eq!(router.record_failure_for_queue("default"), FailureAction::SwitchProvider);
+        assert_eq!(
+            router.record_failure_for_queue("default"),
+            FailureAction::SwitchProvider
+        );
         // Now active is p2
         let (p, _) = router.active_entry_for_queue("default").unwrap();
         assert_eq!(p.id, "p2");

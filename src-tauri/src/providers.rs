@@ -1,10 +1,10 @@
+use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
-use anyhow::Result;
 
 // Re-export Provider and Model for use by other modules that import from providers
-pub use crate::config::{Provider, Model};
+pub use crate::config::{Model, Provider};
 
 /// 格式版本常量，决定请求哪个 URL
 pub const CURRENT_FORMAT_VERSION: u32 = 1;
@@ -175,7 +175,10 @@ pub fn get_all_providers() -> Vec<Provider> {
 /// 异步同步线上供应商配置
 /// 返回 (是否请求成功, 是否有版本更新)
 pub async fn sync_providers() -> (bool, bool) {
-    let url = format!("{}/v{}/providers.json", REMOTE_BASE_URL, CURRENT_FORMAT_VERSION);
+    let url = format!(
+        "{}/v{}/providers.json",
+        REMOTE_BASE_URL, CURRENT_FORMAT_VERSION
+    );
 
     log::info!("[sync] checking remote: {}", url);
 
@@ -255,7 +258,10 @@ pub fn migrate_legacy_config(old_providers: Vec<Provider>) -> Result<()> {
         return save_providers(&providers_config);
     }
 
-    log::info!("[migrate] migrating {} providers from legacy config", old_providers.len());
+    log::info!(
+        "[migrate] migrating {} providers from legacy config",
+        old_providers.len()
+    );
 
     // 分离预设供应商和自定义供应商
     let (builtin_providers, custom_providers): (Vec<Provider>, Vec<Provider>) =
@@ -335,7 +341,10 @@ pub(crate) fn read_legacy_providers() -> Vec<Provider> {
 pub fn save_custom_provider(provider: &Provider) -> Result<()> {
     let mut config = load_custom_providers();
 
-    let existing = config.custom_providers.iter().position(|p| p.id == provider.id);
+    let existing = config
+        .custom_providers
+        .iter()
+        .position(|p| p.id == provider.id);
     match existing {
         Some(idx) => config.custom_providers[idx] = provider.clone(),
         None => config.custom_providers.push(provider.clone()),

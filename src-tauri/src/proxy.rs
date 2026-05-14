@@ -113,7 +113,12 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
     // 构建请求头的 BTreeMap 用于日志记录
     let inbound_headers_map: std::collections::BTreeMap<String, String> = original_headers
         .iter()
-        .map(|(k, v)| (k.as_str().to_string(), v.to_str().unwrap_or("[binary]").to_string()))
+        .map(|(k, v)| {
+            (
+                k.as_str().to_string(),
+                v.to_str().unwrap_or("[binary]").to_string(),
+            )
+        })
         .collect();
 
     log::debug!(
@@ -239,9 +244,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                         LogLevel::Info
                     },
                     "upstream response",
-                    [
-                        ("status", status.to_string()),
-                    ],
+                    [("status", status.to_string())],
                     Some(provider_name.clone()),
                     Some(model_id.clone()),
                     Some(status),
@@ -479,7 +482,9 @@ fn build_upstream_headers_for_route(
                 }
             }
             // 添加 anthropic-version（如果是 messages 路径）
-            if is_anthropic_messages_path(stripped_path) && !headers.contains_key("anthropic-version") {
+            if is_anthropic_messages_path(stripped_path)
+                && !headers.contains_key("anthropic-version")
+            {
                 headers.insert("anthropic-version", HeaderValue::from_static("2023-06-01"));
             }
         }
@@ -644,11 +649,9 @@ mod tests {
     }
 
     mod route_prefix {
-        use super::super::{
-            build_upstream_headers_for_route, parse_route_prefix, RoutePrefix,
-        };
-        use axum::http::{HeaderMap, HeaderValue};
+        use super::super::{build_upstream_headers_for_route, parse_route_prefix, RoutePrefix};
         use crate::config::AuthScheme;
+        use axum::http::{HeaderMap, HeaderValue};
 
         #[test]
         fn parse_anthropic_prefix() {

@@ -1,6 +1,6 @@
 use anyhow::Result;
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
 
 use serde_json::{json, Value};
 
@@ -35,7 +35,11 @@ fn local_base_url(port: u16) -> String {
     format!("http://localhost:{}/anthropic", port)
 }
 
-const MANAGED_ENV_KEYS: [&str; 3] = ["ANTHROPIC_BASE_URL", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_MODEL"];
+const MANAGED_ENV_KEYS: [&str; 3] = [
+    "ANTHROPIC_BASE_URL",
+    "ANTHROPIC_AUTH_TOKEN",
+    "ANTHROPIC_MODEL",
+];
 
 /// 注入代理：把 env.ANTHROPIC_BASE_URL 指到本地代理，同时写入 ANTHROPIC_AUTH_TOKEN。模型固定为 "freemodel-auto"，实际模型由代理层 rewrite。
 pub fn inject_proxy(port: u16, auth_token: &str) -> Result<()> {
@@ -147,9 +151,7 @@ pub fn restore_backup() -> Result<()> {
 }
 
 fn apply_restore(val: &mut Value) {
-    let backup = val
-        .as_object()
-        .and_then(|o| o.get(BACKUP_KEY).cloned());
+    let backup = val.as_object().and_then(|o| o.get(BACKUP_KEY).cloned());
 
     {
         let obj = val.as_object_mut().unwrap();
@@ -188,11 +190,7 @@ fn apply_restore(val: &mut Value) {
 /// 当前 settings.json 是否存在备份节点（即处于"已被本应用修改"状态）。
 pub fn has_backup() -> bool {
     read_settings()
-        .map(|v| {
-            v.get(BACKUP_KEY)
-                .map(|b| b.is_object())
-                .unwrap_or(false)
-        })
+        .map(|v| v.get(BACKUP_KEY).map(|b| b.is_object()).unwrap_or(false))
         .unwrap_or(false)
 }
 

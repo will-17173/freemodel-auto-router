@@ -200,11 +200,6 @@
           "is_custom": false
         },
         {
-          "id": "",
-          "name": "",
-          "is_custom": false
-        },
-        {
           "id": "ZhipuAI/GLM-5.1",
           "name": "GLM-5.1",
           "is_custom": false

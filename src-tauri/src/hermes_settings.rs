@@ -4,11 +4,35 @@ use std::path::PathBuf;
 
 const BACKUP_KEY: &str = "_fm_backup";
 
+fn yaml_key(key: &str) -> serde_yaml::Value {
+    serde_yaml::Value::String(key.to_string())
+}
+
 fn hermes_config_path() -> PathBuf {
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("."))
         .join(".hermes")
         .join("config.yaml")
+}
+
+fn write_config(path: &PathBuf, doc: &serde_yaml::Value) -> Result<()> {
+    let tmp = path.with_extension("tmp");
+    fs::write(&tmp, serde_yaml::to_string(doc)?)?;
+
+    #[cfg(windows)]
+    {
+        // std::fs::rename cannot replace an existing destination on Windows.
+        // Hermes normally already has config.yaml, so copy over it instead.
+        fs::copy(&tmp, path)?;
+        fs::remove_file(&tmp)?;
+    }
+
+    #[cfg(not(windows))]
+    {
+        fs::rename(&tmp, path)?;
+    }
+
+    Ok(())
 }
 
 /// 检查 model 节点是否已经指向我们的代理
@@ -18,7 +42,8 @@ fn is_model_injected(doc: &serde_yaml::Value, port: u16) -> bool {
         .and_then(|v| v.as_str())
         .map(|s| s == "freemodel-auto")
         .unwrap_or(false)
-        && doc.get("model")
+        && doc
+            .get("model")
             .and_then(|m| m.get("base_url"))
             .and_then(|v| v.as_str())
             .map(|s| s == format!("http://localhost:{}/openai/v1", port))
@@ -49,20 +74,16 @@ pub fn inject(provider_id: &str, api_key: &str, port: u16) -> Result<()> {
 
     // --- 在可变借用前读取需要的信息 ---
     let already_injected = is_model_injected(&doc, port);
-    let already_has_backup = doc
-        .get(BACKUP_KEY)
-        .is_some();
-    let model_backup_data: Option<serde_yaml::Mapping> = if !already_has_backup && !already_injected {
+    let already_has_backup = doc.get(BACKUP_KEY).is_some();
+    let model_backup_data: Option<serde_yaml::Mapping> = if !already_has_backup && !already_injected
+    {
         doc.get("model")
             .and_then(|m| m.as_mapping())
             .map(|model_map| {
                 let mut model_backup = serde_yaml::Mapping::new();
                 for k in MODEL_KEYS_TO_BACKUP {
                     if let Some(v) = model_map.get(&serde_yaml::Value::String(k.to_string())) {
-                        model_backup.insert(
-                            serde_yaml::Value::String(k.to_string()),
-                            v.clone(),
-                        );
+                        model_backup.insert(serde_yaml::Value::String(k.to_string()), v.clone());
                     }
                 }
                 model_backup
@@ -152,25 +173,19 @@ pub fn inject(provider_id: &str, api_key: &str, port: u16) -> Result<()> {
     if let Some(seq) = root.get_mut(&cp_key).and_then(|v| v.as_sequence_mut()) {
         let name_key = serde_yaml::Value::String("name".into());
         let name_val = serde_yaml::Value::String(provider_id.to_string());
-        if let Some(pos) = seq.iter().position(|e| {
-            e.as_mapping()
-                .and_then(|m| m.get(&name_key))
-                == Some(&name_val)
-        }) {
+        if let Some(pos) = seq
+            .iter()
+            .position(|e| e.as_mapping().and_then(|m| m.get(&name_key)) == Some(&name_val))
+        {
             seq[pos] = provider_value;
         } else {
             seq.push(provider_value);
         }
     } else {
-        root.insert(
-            cp_key,
-            serde_yaml::Value::Sequence(vec![provider_value]),
-        );
+        root.insert(cp_key, serde_yaml::Value::Sequence(vec![provider_value]));
     }
 
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, serde_yaml::to_string(&doc)?)?;
-    fs::rename(&tmp, &path)?;
+    write_config(&path, &doc)?;
     Ok(())
 }
 
@@ -182,44 +197,68 @@ pub fn remove(provider_id: &str) -> Result<()> {
 
     let content = fs::read_to_string(&path)?;
     let mut doc: serde_yaml::Value = serde_yaml::from_str(&content)?;
-    let root = doc.as_mapping_mut().unwrap();
+    remove_from_doc(&mut doc, provider_id);
 
+    write_config(&path, &doc)?;
+    Ok(())
+}
+
+fn remove_from_doc(doc: &mut serde_yaml::Value, provider_id: &str) {
+    let Some(root) = doc.as_mapping_mut() else {
+        return;
+    };
     // --- 从 custom_providers 中移除 ---
-    let cp_key = serde_yaml::Value::String("custom_providers".into());
+    let cp_key = yaml_key("custom_providers");
     if let Some(seq) = root.get_mut(&cp_key).and_then(|v| v.as_sequence_mut()) {
-        let name_key = serde_yaml::Value::String("name".into());
-        let name_val = serde_yaml::Value::String(provider_id.to_string());
-        seq.retain(|e| {
-            e.as_mapping()
-                .and_then(|m| m.get(&name_key))
-                != Some(&name_val)
-        });
+        let name_key = yaml_key("name");
+        let name_val = yaml_key(provider_id);
+        seq.retain(|e| e.as_mapping().and_then(|m| m.get(&name_key)) != Some(&name_val));
     }
 
     // --- 恢复 model 节点（从备份） ---
-    let backup = root
-        .get(&serde_yaml::Value::String(BACKUP_KEY.into()))
-        .cloned();
+    let backup = root.get(&yaml_key(BACKUP_KEY)).cloned();
+    let mut restored_from_backup = false;
     if let Some(serde_yaml::Value::Mapping(backup_obj)) = backup {
-        if let Some(serde_yaml::Value::Mapping(model_backup)) = backup_obj.get("model") {
-            if let Some(model) = root.get_mut("model").and_then(|m| m.as_mapping_mut()) {
-                // 移除我们注入的字段
-                for k in MODEL_KEYS_TO_BACKUP {
-                    model.remove(&serde_yaml::Value::String(k.to_string()));
-                }
-                // 恢复备份的原始值
+        if let Some(serde_yaml::Value::Mapping(model_backup)) = backup_obj.get(&yaml_key("model")) {
+            if let Some(model) = root
+                .get_mut(&yaml_key("model"))
+                .and_then(|m| m.as_mapping_mut())
+            {
+                clear_model_injection(model);
                 for (k, v) in model_backup {
                     model.insert(k.clone(), v.clone());
                 }
+                restored_from_backup = true;
             }
         }
-        root.remove(&serde_yaml::Value::String(BACKUP_KEY.into()));
+        root.remove(&yaml_key(BACKUP_KEY));
     }
 
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, serde_yaml::to_string(&doc)?)?;
-    fs::rename(&tmp, &path)?;
-    Ok(())
+    // Older injected configs, or configs created while already injected, may not
+    // have a backup. In that case the UI would turn off optimistically, then the
+    // next status poll would see model.default == freemodel-auto and turn it on
+    // again. Clear our model fields when no backup restored them.
+    if !restored_from_backup {
+        if let Some(model) = root
+            .get_mut(&yaml_key("model"))
+            .and_then(|m| m.as_mapping_mut())
+        {
+            let is_freemodel = model
+                .get(&yaml_key("default"))
+                .and_then(|v| v.as_str())
+                .map(|s| s == "freemodel-auto")
+                .unwrap_or(false);
+            if is_freemodel {
+                clear_model_injection(model);
+            }
+        }
+    }
+}
+
+fn clear_model_injection(model: &mut serde_yaml::Mapping) {
+    for k in MODEL_KEYS_TO_BACKUP {
+        model.remove(&yaml_key(k));
+    }
 }
 
 /// Check if Hermes is currently using our proxy (model.default == "freemodel-auto")
@@ -245,4 +284,70 @@ pub fn is_injected(_provider_id: &str) -> bool {
         .and_then(|v| v.as_str())
         .map(|s| s == "freemodel-auto")
         .unwrap_or(false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn remove_restores_model_from_backup() {
+        let mut doc: serde_yaml::Value = serde_yaml::from_str(
+            r#"
+model:
+  default: freemodel-auto
+  provider: test-provider
+  base_url: http://localhost:7860/openai/v1
+  api_mode: chat_completions
+custom_providers:
+  - name: test-provider
+    base_url: http://localhost:7860/openai/v1
+    api_key: test
+    model: freemodel-auto
+_fm_backup:
+  model:
+    default: original-model
+    provider: original-provider
+    base_url: https://example.com/v1
+    api_mode: responses
+"#,
+        )
+        .unwrap();
+
+        remove_from_doc(&mut doc, "test-provider");
+
+        assert_eq!(doc["model"]["default"].as_str(), Some("original-model"));
+        assert_eq!(doc["model"]["provider"].as_str(), Some("original-provider"));
+        assert!(doc.get(BACKUP_KEY).is_none());
+        assert!(doc["custom_providers"].as_sequence().unwrap().is_empty());
+    }
+
+    #[test]
+    fn remove_clears_model_when_backup_is_missing() {
+        let mut doc: serde_yaml::Value = serde_yaml::from_str(
+            r#"
+model:
+  default: freemodel-auto
+  provider: test-provider
+  base_url: http://localhost:7860/openai/v1
+  api_mode: chat_completions
+  keep_me: true
+custom_providers:
+  - name: test-provider
+    base_url: http://localhost:7860/openai/v1
+    api_key: test
+    model: freemodel-auto
+"#,
+        )
+        .unwrap();
+
+        remove_from_doc(&mut doc, "test-provider");
+
+        assert!(doc["model"].get("default").is_none());
+        assert!(doc["model"].get("provider").is_none());
+        assert!(doc["model"].get("base_url").is_none());
+        assert!(doc["model"].get("api_mode").is_none());
+        assert_eq!(doc["model"]["keep_me"].as_bool(), Some(true));
+        assert!(doc["custom_providers"].as_sequence().unwrap().is_empty());
+    }
 }

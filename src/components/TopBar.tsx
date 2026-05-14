@@ -10,6 +10,7 @@ import hermesImg from "@/assets/images/hermes.png"
 import openclawImg from "@/assets/images/openclaw.png"
 import codexImg from "@/assets/images/codex-color.png"
 import claudecodeImg from "@/assets/images/claudecode-color.png"
+import type { AppInstallations } from "@/types"
 
 interface AppToggleProps {
   id: string
@@ -57,11 +58,14 @@ interface TopBarProps {
     openclaw: boolean
   }
   onAppToggle: (appId: string, enabled: boolean) => void
+  appInstallations: AppInstallations | null
 }
 
-export function TopBar({ port, isActive, appStates, onAppToggle }: TopBarProps) {
+export function TopBar({ port, isActive, appStates, onAppToggle, appInstallations }: TopBarProps) {
+  const codexInstalled = appInstallations?.codex.installed ?? false
+
   return (
-    <div className="h-12 px-5 bg-card border-b border-border flex items-center justify-between shrink-0">
+    <div className="h-12 px-5 bg-card/95 border-b border-border shadow-sm flex items-center justify-between shrink-0">
       {/* Server status */}
       <div className="flex items-center gap-2">
         <span className={cn(
@@ -86,7 +90,14 @@ export function TopBar({ port, isActive, appStates, onAppToggle }: TopBarProps) 
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="cursor-default">
-                <AppToggle id="codex" label="Codex" iconUrl={codexImg} enabled={false} disabled onToggle={() => {}} />
+                <AppToggle
+                  id="codex"
+                  label="Codex"
+                  iconUrl={codexImg}
+                  enabled={appStates.codex}
+                  disabled={!isActive || !codexInstalled}
+                  onToggle={(e) => onAppToggle("codex", e)}
+                />
               </span>
             </TooltipTrigger>
             <TooltipContent side="bottom">

@@ -28,7 +28,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   }, [])
 
   return (
-    <div className="w-[240px] h-full bg-secondary border-r border-border flex flex-col shrink-0">
+    <div className="w-[240px] h-full bg-sidebar border-r border-sidebar-border flex flex-col shrink-0 shadow-[inset_-1px_0_0_rgba(255,255,255,0.55)]">
       {/* Logo */}
       <div className="p-5 pb-4 flex items-center gap-3">
         <img src={logoImg} alt="freemodel-auto-router" className="h-12 w-12 rounded-lg" />
@@ -45,10 +45,10 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
             key={item.id}
             onClick={() => onPageChange(item.id)}
             className={cn(
-              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left",
+              "flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors w-full text-left border",
               currentPage === item.id
-                ? "bg-primary/10 text-primary font-medium border border-primary/20"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                ? "bg-card text-primary font-medium border-primary/20 shadow-sm"
+                : "border-transparent text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
             )}
           >
             {item.icon}

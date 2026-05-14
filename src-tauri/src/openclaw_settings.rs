@@ -1,8 +1,8 @@
+use crate::config::Model;
 use anyhow::Result;
+use serde_json::{json, Value};
 use std::fs;
 use std::path::PathBuf;
-use serde_json::{json, Value};
-use crate::config::Model;
 
 fn openclaw_config_path() -> PathBuf {
     dirs::home_dir()
@@ -22,10 +22,7 @@ pub fn inject(provider_id: &str, api_key: &str, models: &[Model], port: u16) -> 
         json!({})
     };
 
-    let models_json: Vec<Value> = models
-        .iter()
-        .map(|m| json!({ "id": m.id }))
-        .collect();
+    let models_json: Vec<Value> = models.iter().map(|m| json!({ "id": m.id })).collect();
 
     let provider_entry = json!({
         "baseUrl": format!("http://localhost:{}/openai", port),

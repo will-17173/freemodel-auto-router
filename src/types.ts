@@ -90,6 +90,17 @@ export interface ProviderSwitchedPayload {
   provider_name: string;
 }
 
+export interface AppInstallInfo {
+  installed: boolean;
+  command_found: boolean;
+  config_found: boolean;
+  version?: string | null;
+}
+
+export interface AppInstallations {
+  codex: AppInstallInfo;
+}
+
 // Draft item for queue creation panel (same structure as QueueItem)
 export type DraftItem = QueueItem;
 

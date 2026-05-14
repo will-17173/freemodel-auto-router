@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use anyhow::Result;
+use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
@@ -71,7 +71,10 @@ pub struct RetryConfig {
 
 impl Default for RetryConfig {
     fn default() -> Self {
-        Self { max_retries: 2, retry_delay_secs: 3 }
+        Self {
+            max_retries: 2,
+            retry_delay_secs: 3,
+        }
     }
 }
 
@@ -111,12 +114,15 @@ impl MatchRule {
         match &self.rule_type {
             MatchRuleType::UserAgentContains => ua.contains(&self.pattern),
             MatchRuleType::HeaderEquals => {
-                let Some(header_name) = self.header_name.as_ref() else { return false };
-                headers.get(header_name.as_str())
+                let Some(header_name) = self.header_name.as_ref() else {
+                    return false;
+                };
+                headers
+                    .get(header_name.as_str())
                     .and_then(|v| v.to_str().ok())
                     .map(|v| v == self.pattern)
                     .unwrap_or(false)
-            },
+            }
             MatchRuleType::PathContains => path.contains(&self.pattern),
         }
     }
@@ -131,19 +137,26 @@ pub struct AppMapping {
     pub queue_id: String,
 }
 
-fn default_port() -> u16 { 7860 }
+fn default_port() -> u16 {
+    7860
+}
 
 fn default_queues() -> std::collections::HashMap<String, Queue> {
     let mut map = std::collections::HashMap::new();
-    map.insert("default".to_string(), Queue {
-        id: "default".to_string(),
-        name: "默认队列".to_string(),
-        items: vec![],
-    });
+    map.insert(
+        "default".to_string(),
+        Queue {
+            id: "default".to_string(),
+            name: "默认队列".to_string(),
+            items: vec![],
+        },
+    );
     map
 }
 
-fn default_queue_id() -> String { "default".to_string() }
+fn default_queue_id() -> String {
+    "default".to_string()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -194,17 +207,20 @@ pub fn load_config() -> AppConfig {
                     if let Some(default_queue) = cfg.queues.get_mut("default") {
                         if default_queue.items.is_empty() {
                             default_queue.items = cfg.queue.clone();
-                            log::info!("[config] migrated legacy queue to queues.default ({} items)", cfg.queue.len());
+                            log::info!(
+                                "[config] migrated legacy queue to queues.default ({} items)",
+                                cfg.queue.len()
+                            );
                         }
                     }
-                    cfg.queue.clear();  // 清空旧字段
-                    // Persist migration so it doesn't repeat on next startup
+                    cfg.queue.clear(); // 清空旧字段
+                                       // Persist migration so it doesn't repeat on next startup
                     if let Err(e) = save_config(&cfg) {
                         log::warn!("[config] failed to persist migration: {e}");
                     }
                 }
                 cfg
-            },
+            }
             Err(e) => {
                 eprintln!("[config] parse error: {e}");
                 AppConfig::default()

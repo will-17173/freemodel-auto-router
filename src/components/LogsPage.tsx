@@ -35,7 +35,7 @@ function formatTokens(n: number | undefined) {
 function StatusBadge({ status }: { status: number | undefined }) {
   if (status === undefined || status === null) return <span className="text-muted-foreground text-xs">-</span>
   if (status >= 200 && status < 300) {
-    return <Badge className="text-[10px] px-1.5 py-0 bg-green-500 hover:bg-green-500 text-white">{status}</Badge>
+    return <Badge className="text-[10px] px-1.5 py-0 bg-[var(--fm-success)] hover:bg-[var(--fm-success)] text-white">{status}</Badge>
   }
   if (status >= 400) {
     return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">{status}</Badge>
@@ -115,7 +115,7 @@ export function LogsPage({ port: _port }: LogsPageProps) {
                 <>
                   <TableRow
                     key={log.id}
-                    className={`${log.level === "error" ? "bg-destructive/5" : log.level === "warn" ? "bg-yellow-50/50 dark:bg-yellow-950/20" : ""} ${hasHeaders ? "cursor-pointer hover:bg-muted/50" : ""}`}
+                    className={`${log.level === "error" ? "bg-destructive/5" : log.level === "warn" ? "bg-[var(--fm-warning-subtle)]" : ""} ${hasHeaders ? "cursor-pointer hover:bg-muted/50" : ""}`}
                     onClick={hasHeaders ? () => toggleExpand(log.id) : undefined}
                   >
                     <TableCell className="font-mono text-xs text-muted-foreground">
@@ -142,7 +142,7 @@ export function LogsPage({ port: _port }: LogsPageProps) {
                     <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate flex items-center gap-1">
                       {log.message}
                       {hasHeaders && (
-                        <span className="text-xs text-blue-500 shrink-0">
+                        <span className="text-xs text-primary shrink-0">
                           {isExpanded ? " ▼" : " ▶"}
                         </span>
                       )}
