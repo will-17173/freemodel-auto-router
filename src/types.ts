@@ -60,7 +60,6 @@ export interface QueueStateInfo {
 }
 
 export interface AppConfig {
-  providers: Provider[];
   retry: RetryConfig;
   queues: Record<string, Queue>;
   app_mapping: AppMapping[];
@@ -93,3 +92,16 @@ export interface ProviderSwitchedPayload {
 
 // Draft item for queue creation panel (same structure as QueueItem)
 export type DraftItem = QueueItem;
+
+// providers.json 结构
+export interface ProvidersConfig {
+  version: number;
+  format_version: number;
+  providers: Provider[];
+}
+
+// custom_providers.json 结构
+export interface CustomProvidersConfig {
+  custom_providers: Provider[];
+  custom_models_in_builtin: Record<string, Model[]>;
+}

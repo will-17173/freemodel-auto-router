@@ -9,13 +9,9 @@ import type { Provider, DraftItem } from "@/types"
 // 测试状态类型
 type TestStatus = "idle" | "testing" | "success" | "error"
 
-// 内置供应商 ID，这些不可删除
-const BUILTIN_PROVIDER_IDS = ["openrouter", "longcat"]
-
-// 判断供应商是否可删除
+// 判断供应商是否可删除（只有 is_custom 的供应商可删除）
 function canDeleteProvider(provider: Provider): boolean {
-  if (provider.is_custom) return true
-  return !BUILTIN_PROVIDER_IDS.includes(provider.id)
+  return !!provider.is_custom
 }
 
 // 判断模型是否可删除（自定义供应商的模型都可删除，或者有 is_custom 标记的）
@@ -158,6 +154,11 @@ export function ProvidersPage({
                   <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
                 )}
                 <span className="font-semibold text-sm text-foreground">{provider.name}</span>
+                {!provider.is_custom && (
+                  <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    预设
+                  </span>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 {/* 添加模型按钮 */}

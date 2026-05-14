@@ -6,7 +6,9 @@ import {
   injectCodex, removeCodex, injectHermes, removeHermes, isHermesInjected,
   injectOpenclaw, removeOpenclaw,
   getQueueStates, resetQueueExhausted, createQueue, deleteQueue, updateQueue, setDefaultQueue,
-  getAuth, saveAuth, getAllAuth, deleteProvider, deleteModel,
+  getAuth, saveAuth, getAllAuth,
+  getProviders, saveCustomProvider, deleteCustomProvider,
+  addCustomModelToBuiltin, deleteCustomModelFromBuiltin,
 } from "./api";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -46,6 +48,7 @@ function createProviderId(name: string, providers: Provider[]) {
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [providers, setProviders] = useState<Provider[]>([]);
   const [authMap, setAuthMap] = useState<Record<string, boolean>>({});  // provider_id -> hasKey
   const [currentPage, setCurrentPage] = useState<PageId>("providers");
   const [showAddProvider, setShowAddProvider] = useState(false);
@@ -68,6 +71,7 @@ export default function App() {
 
   useEffect(() => {
     getConfig().then(setConfig);
+    getProviders().then(setProviders);
     getAllAuth().then(setAuthMap);
   }, []);
 
@@ -110,7 +114,7 @@ export default function App() {
     const defaultQueue = config.queues[config.default_queue_id];
     const head = defaultQueue?.items[0];
     if (!head) return;
-    const provider = config.providers.find((p) => p.id === head.provider_id);
+    const provider = providers.find((p) => p.id === head.provider_id);
     if (!provider) return;
     if (!authMap[provider.id]) return;
     getAuth(provider.id).then((key) => {
@@ -133,7 +137,7 @@ export default function App() {
     const activeIdx = defaultQueueState?.active_idx ?? 0;
     const activeItem = defaultQueue?.items[activeIdx];
     const provider = activeItem
-      ? config.providers.find((p) => p.id === activeItem.provider_id)
+      ? providers.find((p) => p.id === activeItem.provider_id)
       : undefined;
     if (!provider) return;
     isHermesInjected(provider.id)
@@ -314,12 +318,26 @@ export default function App() {
   }
 
   function addModel(providerId: string, modelId: string) {
-    const providers = config!.providers.map((p) =>
-      p.id !== providerId
-        ? p
-        : { ...p, models: [...p.models, { id: modelId, name: modelId, is_custom: true }] }
-    );
-    updateAndSave({ ...config!, providers });
+    const provider = providers.find((p) => p.id === providerId);
+    if (!provider) return;
+
+    const newModel = { id: modelId, name: modelId, is_custom: true };
+
+    if (provider.is_custom) {
+      const updatedModels = [...provider.models, newModel];
+      saveCustomProvider({ ...provider, models: updatedModels }).then(() => {
+        setProviders((prev) =>
+          prev.map((p) => p.id === providerId ? { ...p, models: updatedModels } : p)
+        );
+      }).catch(console.error);
+    } else {
+      addCustomModelToBuiltin(providerId, newModel).then(() => {
+        setProviders((prev) =>
+          prev.map((p) => p.id === providerId ? { ...p, models: [...p.models, newModel] } : p)
+        );
+      }).catch(console.error);
+    }
+
     setAddingModelProviderId(null);
   }
 
@@ -368,7 +386,7 @@ export default function App() {
 
   async function addProvider(input: AddProviderPayload) {
     const nextProvider: Provider = {
-      id: createProviderId(input.name, config!.providers),
+      id: createProviderId(input.name, providers),
       name: input.name,
       anthropic_url: input.anthropicUrl,
       openai_url: input.openaiUrl,
@@ -380,11 +398,12 @@ export default function App() {
         name: modelId,
         is_custom: true,
       })),
-      priority: Math.max(0, ...config!.providers.map((provider) => provider.priority)) + 1,
+      priority: Math.max(0, ...providers.map((provider) => provider.priority)) + 1,
       is_custom: true,
     };
 
-    updateAndSave({ ...config!, providers: [...config!.providers, nextProvider] });
+    await saveCustomProvider(nextProvider);
+    setProviders((prev) => [...prev, nextProvider]);
     if (input.apiKey.trim().length > 0) {
       await saveAuth(nextProvider.id, input.apiKey);
       setAuthMap((prev) => ({ ...prev, [nextProvider.id]: true }));
@@ -392,25 +411,15 @@ export default function App() {
   }
 
   function handleDeleteProvider(providerId: string) {
-    deleteProvider(providerId).then(() => {
-      setConfig((prev) => {
-        if (!prev) return prev;
-        const updatedProviders = prev.providers.filter((p) => p.id !== providerId);
-        // 从所有队列中移除该供应商的项目
-        const updatedQueues = { ...prev.queues };
-        for (const queueId in updatedQueues) {
-          updatedQueues[queueId] = {
-            ...updatedQueues[queueId],
-            items: updatedQueues[queueId].items.filter((item) => item.provider_id !== providerId),
-          };
-        }
-        return { ...prev, providers: updatedProviders, queues: updatedQueues };
-      });
+    deleteCustomProvider(providerId).then(() => {
+      setProviders((prev) => prev.filter((p) => p.id !== providerId));
       setAuthMap((prev) => {
         const next = { ...prev };
         delete next[providerId];
         return next;
       });
+      // 后端已更新队列，重新加载 config 同步队列状态
+      getConfig().then(setConfig).catch(console.error);
     }).catch((e) => {
       alert(`删除失败: ${e}`);
       console.error(e);
@@ -418,37 +427,39 @@ export default function App() {
   }
 
   function handleDeleteModel(providerId: string, modelId: string) {
-    deleteModel(providerId, modelId).then(() => {
-      setConfig((prev) => {
-        if (!prev) return prev;
-        const updatedProviders = prev.providers.map((p) => {
-          if (p.id !== providerId) return p;
-          return { ...p, models: p.models.filter((m) => m.id !== modelId) };
-        });
-        // 从所有队列中移除该模型
-        const updatedQueues = { ...prev.queues };
-        for (const queueId in updatedQueues) {
-          updatedQueues[queueId] = {
-            ...updatedQueues[queueId],
-            items: updatedQueues[queueId].items.filter(
-              (item) => item.provider_id !== providerId || item.model_id !== modelId
-            ),
-          };
-        }
-        return { ...prev, providers: updatedProviders, queues: updatedQueues };
-      });
-    }).catch((e) => {
-      alert(`删除失败: ${e}`);
-      console.error(e);
-    });
+    const provider = providers.find((p) => p.id === providerId);
+    if (!provider) return;
+
+    if (provider.is_custom) {
+      // 自定义供应商：保存整个 provider（含更新后的 models）
+      const updatedModels = provider.models.filter((m) => m.id !== modelId);
+      saveCustomProvider({ ...provider, models: updatedModels }).then(() => {
+        setProviders((prev) =>
+          prev.map((p) => p.id === providerId ? { ...p, models: updatedModels } : p)
+        );
+        // 后端已更新队列，重新加载 config
+        getConfig().then(setConfig).catch(console.error);
+      }).catch((e) => { alert(`删除失败: ${e}`); console.error(e); });
+    } else {
+      // 预设供应商的自定义模型
+      deleteCustomModelFromBuiltin(providerId, modelId).then(() => {
+        setProviders((prev) =>
+          prev.map((p) =>
+            p.id === providerId ? { ...p, models: p.models.filter((m) => m.id !== modelId) } : p
+          )
+        );
+        // 后端已更新队列，重新加载 config
+        getConfig().then(setConfig).catch(console.error);
+      }).catch((e) => { alert(`删除失败: ${e}`); console.error(e); });
+    }
   }
 
   const editingKeyProvider = editingKeyProviderId
-    ? config.providers.find((p) => p.id === editingKeyProviderId) ?? null
+    ? providers.find((p) => p.id === editingKeyProviderId) ?? null
     : null;
 
   const addingModelProvider = addingModelProviderId
-    ? config.providers.find((p) => p.id === addingModelProviderId) ?? null
+    ? providers.find((p) => p.id === addingModelProviderId) ?? null
     : null;
 
   // Use default queue's active item for global status display
@@ -457,7 +468,7 @@ export default function App() {
   const defaultActiveIdx = defaultQueueState?.active_idx ?? 0;
   const activeQueueItem = defaultQueue?.items[defaultActiveIdx] ?? defaultQueue?.items[0];
   const activeProvider = activeQueueItem
-    ? config.providers.find((p) => p.id === activeQueueItem.provider_id)
+    ? providers.find((p) => p.id === activeQueueItem.provider_id)
     : undefined;
   const activeModel = activeProvider?.models.find((m) => m.id === activeQueueItem?.model_id);
   const isActive = !!(activeProvider && activeModel);
@@ -482,7 +493,7 @@ export default function App() {
         {/* Page content */}
         {currentPage === "providers" && (
           <ProvidersPage
-            providers={config.providers}
+            providers={providers}
             authMap={authMap}
             onAddToQueue={addToQueue}
             onConfigKey={(id) => setEditingKeyProviderId(id)}
@@ -507,7 +518,7 @@ export default function App() {
           <QueuePage
             queues={config.queues}
             queueStates={queueStates}
-            providers={config.providers}
+            providers={providers}
             defaultQueueId={config.default_queue_id}
             selectedQueueId={selectedQueueId}
             onSelectQueue={setSelectedQueueId}
@@ -533,7 +544,7 @@ export default function App() {
                   if (appStates.cc) {
                     const dq = next.queues[next.default_queue_id];
                     const head = dq?.items[0];
-                    const p = head ? next.providers.find((pr) => pr.id === head.provider_id) : undefined;
+                    const p = head ? providers.find((pr) => pr.id === head.provider_id) : undefined;
                     if (p) {
                       const apiKey = await getAuth(p.id);
                       if (apiKey && apiKey.trim().length > 0) {

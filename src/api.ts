@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, ProxyLogEntry, Model, Queue, AppMapping, QueueStateInfo, QueueItem } from "./types";
+import type { AppConfig, ProxyLogEntry, Model, Provider, Queue, AppMapping, QueueStateInfo, QueueItem } from "./types";
 
 export const getConfig = (): Promise<AppConfig> => invoke("get_config");
 export const saveConfig = (cfg: AppConfig): Promise<void> => invoke("save_config_cmd", { cfg });
@@ -58,8 +58,13 @@ export interface TestConnectionResult {
 export const testProviderConnection = (providerId: string): Promise<TestConnectionResult> =>
   invoke("test_provider_connection_cmd", { providerId });
 
-// Provider and model management
-export const deleteProvider = (providerId: string): Promise<void> =>
-  invoke("delete_provider_cmd", { providerId });
-export const deleteModel = (providerId: string, modelId: string): Promise<void> =>
-  invoke("delete_model_cmd", { providerId, modelId });
+// Provider API (new providers architecture)
+export const getProviders = (): Promise<Provider[]> => invoke("get_providers_cmd");
+export const saveCustomProvider = (provider: Provider): Promise<void> =>
+  invoke("save_custom_provider_cmd", { provider });
+export const deleteCustomProvider = (providerId: string): Promise<void> =>
+  invoke("delete_custom_provider_cmd", { providerId });
+export const addCustomModelToBuiltin = (providerId: string, model: Model): Promise<void> =>
+  invoke("add_custom_model_to_builtin_cmd", { providerId, model });
+export const deleteCustomModelFromBuiltin = (providerId: string, modelId: string): Promise<void> =>
+  invoke("delete_custom_model_from_builtin_cmd", { providerId, modelId });
