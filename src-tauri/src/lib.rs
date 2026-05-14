@@ -120,7 +120,9 @@ pub fn run() {
             }))));
 
             // System tray
+            let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
             let _tray = tauri::tray::TrayIconBuilder::new()
+                .icon(tray_icon)
                 .tooltip("freemodel router")
                 .on_tray_icon_event(|tray, event| {
                     if let tauri::tray::TrayIconEvent::Click { .. } = event {
@@ -499,13 +501,11 @@ fn is_hermes_injected_cmd(provider_id: String) -> bool {
 
 #[tauri::command]
 fn inject_openclaw_cmd(
-    provider_id: String,
     api_key: String,
-    models: Vec<config::Model>,
     port: u16,
     logs: tauri::State<'_, proxy_log::ProxyLogStore>,
 ) -> Result<(), String> {
-    match openclaw_settings::inject(&provider_id, &api_key, &models, port) {
+    match openclaw_settings::inject(&api_key, port) {
         Ok(()) => {
             logs.push(
                 proxy_log::LogLevel::Info,
@@ -513,7 +513,6 @@ fn inject_openclaw_cmd(
                 [
                     ("app", "OpenClaw"),
                     ("action", "inject"),
-                    ("provider_id", &provider_id),
                     ("port", &port.to_string()),
                 ],
             );
@@ -526,7 +525,6 @@ fn inject_openclaw_cmd(
                 [
                     ("app", "OpenClaw"),
                     ("action", "inject"),
-                    ("provider_id", &provider_id),
                     ("error", &e.to_string()),
                 ],
             );

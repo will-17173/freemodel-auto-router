@@ -18,7 +18,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
-import { ToastProvider } from "./components/ui/toast";
+import { ToastProvider, useToast } from "./components/ui/toast";
 import { dedupeQueueItems } from "./lib/queue";
 import { trackEvent } from "./lib/analytics";
 import type { AppConfig, Provider, QueueStateInfo, ProviderSwitchedPayload, DraftItem, AppInstallations } from "./types";
@@ -47,7 +47,7 @@ function createProviderId(name: string, providers: Provider[]) {
   return id;
 }
 
-export default function App() {
+function AppContent() {
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);  // 独立 providers 状态
   const [authMap, setAuthMap] = useState<Record<string, boolean>>({});  // provider_id -> hasKey
@@ -69,6 +69,7 @@ export default function App() {
   const [editingQueueId, setEditingQueueId] = useState<string | null>(null);
   const [editPanelName, setEditPanelName] = useState("");
   const [editPanelItems, setEditPanelItems] = useState<DraftItem[]>([]);
+  const { showToast } = useToast();
 
   function handlePageChange(page: PageId) {
     if (page !== currentPage) {
@@ -193,7 +194,7 @@ export default function App() {
       trackEvent("queue_item_added");
       return [...currentItems, { provider_id: providerId, model_id: modelId }];
     });
-    if (duplicated) alert("该模型已存在于队列中");
+    if (duplicated) showToast("info", "该模型已存在于队列中");
   }
 
   function openEditPanel(queueId: string) {
@@ -242,11 +243,11 @@ export default function App() {
 
   async function saveEditPanel() {
     if (!editPanelName.trim()) {
-      alert("队列名不能为空");
+      showToast("error", "队列名不能为空");
       return;
     }
     if (editPanelItems.length === 0) {
-      alert("队列为空，请添加至少一个模型");
+      showToast("error", "队列为空，请添加至少一个模型");
       return;
     }
 
@@ -264,7 +265,7 @@ export default function App() {
             : prev
         );
         trackEvent("queue_created", { item_count: savedItems.length });
-        alert(`队列 "${editPanelName}" 创建成功`);
+        showToast("success", `队列 "${editPanelName}" 创建成功`);
       } else {
         await updateQueue(editingQueueId!, editPanelName, savedItems);
         setConfig((prev) =>
@@ -279,11 +280,11 @@ export default function App() {
             : prev
         );
         trackEvent("queue_updated", { item_count: savedItems.length });
-        alert(`队列 "${editPanelName}" 已保存`);
+        showToast("success", `队列 "${editPanelName}" 已保存`);
       }
       closeEditPanel();
     } catch (e) {
-      alert("保存失败");
+      showToast("error", "保存失败");
       console.error(e);
     }
   }
@@ -371,7 +372,7 @@ export default function App() {
     } else if (appId === "openclaw") {
       if (enabled) {
         const apiKey = await getAuth(activeProvider!.id) || "";
-        await injectOpenclaw(activeProvider!.id, apiKey, activeProvider!.models, config!.port);
+        await injectOpenclaw(apiKey, config!.port);
         setAppStates(prev => ({ ...prev, openclaw: true }));
         trackEvent("app_integration_toggled", { app_id: appId, enabled });
       } else {
@@ -492,8 +493,7 @@ export default function App() {
 
 
   return (
-    <ToastProvider>
-      <div className="h-screen flex bg-background text-foreground">
+    <div className="h-screen flex bg-background text-foreground">
       {/* Sidebar */}
       <Sidebar currentPage={currentPage} onPageChange={handlePageChange} />
 
@@ -604,8 +604,14 @@ export default function App() {
           onClose={() => setAddingModelProviderId(null)}
         />
       )}
-
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <AppContent />
     </ToastProvider>
   );
 }

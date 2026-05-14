@@ -100,7 +100,7 @@ export function LogsPage({ port: _port }: LogsPageProps) {
               <TableHead className="w-[90px]">时间</TableHead>
               <TableHead className="w-[60px]">状态</TableHead>
               <TableHead className="w-[130px]">厂商</TableHead>
-              <TableHead className="w-[180px]">模型</TableHead>
+              <TableHead className="w-[260px]">模型</TableHead>
               <TableHead className="w-[70px] text-right">输入</TableHead>
               <TableHead className="w-[70px] text-right">输出</TableHead>
               <TableHead className="w-[80px] text-right">耗时</TableHead>
@@ -127,7 +127,7 @@ export function LogsPage({ port: _port }: LogsPageProps) {
                     <TableCell className="text-sm truncate max-w-[130px]">
                       {log.provider ?? <span className="text-muted-foreground">-</span>}
                     </TableCell>
-                    <TableCell className="text-sm font-mono text-xs truncate max-w-[180px]">
+                    <TableCell className="text-sm font-mono text-xs truncate max-w-[260px]">
                       {log.model ?? <span className="text-muted-foreground">-</span>}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-right">

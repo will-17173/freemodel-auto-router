@@ -9,9 +9,10 @@ fn yaml_key(key: &str) -> serde_yaml::Value {
 }
 
 fn hermes_config_path() -> PathBuf {
-    dirs::home_dir()
+    dirs::data_local_dir()
+        .or_else(dirs::home_dir)
         .unwrap_or_else(|| PathBuf::from("."))
-        .join(".hermes")
+        .join("hermes")
         .join("config.yaml")
 }
 
@@ -70,6 +71,7 @@ pub fn inject(provider_id: &str, api_key: &str, port: u16) -> Result<()> {
     };
 
     let model_id = "freemodel-auto".to_string();
+    let hermes_provider_id = format!("custom:{provider_id}");
     let base_url = format!("http://localhost:{}/openai/v1", port);
 
     // --- 在可变借用前读取需要的信息 ---
@@ -120,7 +122,7 @@ pub fn inject(provider_id: &str, api_key: &str, port: u16) -> Result<()> {
             );
             model_map.insert(
                 serde_yaml::Value::String("provider".into()),
-                serde_yaml::Value::String(provider_id.to_string()),
+                serde_yaml::Value::String(hermes_provider_id),
             );
             model_map.insert(
                 serde_yaml::Value::String("base_url".into()),
@@ -213,6 +215,17 @@ fn remove_from_doc(doc: &mut serde_yaml::Value, provider_id: &str) {
         let name_key = yaml_key("name");
         let name_val = yaml_key(provider_id);
         seq.retain(|e| e.as_mapping().and_then(|m| m.get(&name_key)) != Some(&name_val));
+    }
+
+    let model_provider = root
+        .get(&yaml_key("model"))
+        .and_then(|m| m.get(&yaml_key("provider")))
+        .and_then(|v| v.as_str());
+    let provider_matches = model_provider.is_none_or(|current_provider| {
+        current_provider == provider_id || current_provider == format!("custom:{provider_id}")
+    });
+    if !provider_matches {
+        return;
     }
 
     // --- 恢复 model 节点（从备份） ---
@@ -348,6 +361,56 @@ custom_providers:
         assert!(doc["model"].get("base_url").is_none());
         assert!(doc["model"].get("api_mode").is_none());
         assert_eq!(doc["model"]["keep_me"].as_bool(), Some(true));
+        assert!(doc["custom_providers"].as_sequence().unwrap().is_empty());
+    }
+
+    #[test]
+    fn remove_other_provider_does_not_clear_active_model() {
+        let mut doc: serde_yaml::Value = serde_yaml::from_str(
+            r#"
+model:
+  default: freemodel-auto
+  provider: vercel-ai-gateway
+  base_url: http://localhost:7860/openai/v1
+  api_mode: chat_completions
+custom_providers:
+  - name: vercel-ai-gateway
+    base_url: http://localhost:7860/openai/v1
+    api_key: test
+    model: freemodel-auto
+"#,
+        )
+        .unwrap();
+
+        remove_from_doc(&mut doc, "sensenova");
+
+        assert_eq!(doc["model"]["default"].as_str(), Some("freemodel-auto"));
+        assert_eq!(doc["model"]["provider"].as_str(), Some("vercel-ai-gateway"));
+        assert_eq!(doc["custom_providers"].as_sequence().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn remove_accepts_named_custom_provider_prefix() {
+        let mut doc: serde_yaml::Value = serde_yaml::from_str(
+            r#"
+model:
+  default: freemodel-auto
+  provider: custom:longcat
+  base_url: http://localhost:7860/openai/v1
+  api_mode: chat_completions
+custom_providers:
+  - name: longcat
+    base_url: http://localhost:7860/openai/v1
+    api_key: test
+    model: freemodel-auto
+"#,
+        )
+        .unwrap();
+
+        remove_from_doc(&mut doc, "longcat");
+
+        assert!(doc["model"].get("default").is_none());
+        assert!(doc["model"].get("provider").is_none());
         assert!(doc["custom_providers"].as_sequence().unwrap().is_empty());
     }
 }

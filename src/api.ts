@@ -29,8 +29,8 @@ export const injectHermes = (providerId: string, apiKey: string, port: number): 
   invoke("inject_hermes_cmd", { providerId, apiKey, port });
 export const removeHermes = (providerId: string): Promise<void> => invoke("remove_hermes_cmd", { providerId });
 export const isHermesInjected = (providerId: string): Promise<boolean> => invoke("is_hermes_injected_cmd", { providerId });
-export const injectOpenclaw = (providerId: string, apiKey: string, models: Model[], port: number): Promise<void> =>
-  invoke("inject_openclaw_cmd", { providerId, apiKey, models, port });
+export const injectOpenclaw = (apiKey: string, port: number): Promise<void> =>
+  invoke("inject_openclaw_cmd", { apiKey, port });
 export const removeOpenclaw = (providerId: string): Promise<void> => invoke("remove_openclaw_cmd", { providerId });
 
 // Queue state API
