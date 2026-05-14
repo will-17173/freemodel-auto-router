@@ -3,7 +3,6 @@ import { getVersion } from "@tauri-apps/api/app"
 import { cn } from "@/lib/utils"
 import {
   LayoutGrid,
-  ListOrdered,
   FileText,
   Settings,
 } from "lucide-react"
@@ -18,7 +17,6 @@ interface SidebarProps {
 
 const menuItems: { id: PageId; label: string; icon: React.ReactNode }[] = [
   { id: "providers", label: "供应商", icon: <LayoutGrid className="h-4 w-4" /> },
-  { id: "queue", label: "路由队列", icon: <ListOrdered className="h-4 w-4" /> },
   { id: "logs", label: "日志", icon: <FileText className="h-4 w-4" /> },
   { id: "settings", label: "设置", icon: <Settings className="h-4 w-4" /> },
 ]
