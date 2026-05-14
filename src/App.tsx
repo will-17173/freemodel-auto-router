@@ -6,7 +6,8 @@ import {
   injectCodex, removeCodex, injectHermes, removeHermes, isHermesInjected,
   injectOpenclaw, removeOpenclaw,
   getQueueStates, createQueue, deleteQueue, updateQueue, setDefaultQueue,
-  getAuth, saveAuth, getAllAuth, deleteProvider, deleteModel,
+  getAuth, saveAuth, getAllAuth,
+  getProviders, deleteCustomProvider, deleteCustomModelFromBuiltin, addCustomModelToBuiltin, saveCustomProvider,
 } from "./api";
 import { Sidebar, type PageId } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -45,6 +46,7 @@ function createProviderId(name: string, providers: Provider[]) {
 
 export default function App() {
   const [config, setConfig] = useState<AppConfig | null>(null);
+  const [providers, setProviders] = useState<Provider[]>([]);  // 独立 providers 状态
   const [authMap, setAuthMap] = useState<Record<string, boolean>>({});  // provider_id -> hasKey
   const [currentPage, setCurrentPage] = useState<PageId>("providers");
   const [showAddProvider, setShowAddProvider] = useState(false);
@@ -66,6 +68,7 @@ export default function App() {
 
   useEffect(() => {
     getConfig().then(setConfig);
+    getProviders().then(setProviders);
     getAllAuth().then(setAuthMap);
   }, []);
 
@@ -107,7 +110,7 @@ export default function App() {
     const defaultQueue = config.queues[config.default_queue_id];
     const head = defaultQueue?.items[0];
     if (!head) return;
-    const provider = config.providers.find((p) => p.id === head.provider_id);
+    const provider = providers.find((p) => p.id === head.provider_id);
     if (!provider) return;
     if (!authMap[provider.id]) return;
     getAuth(provider.id).then((key) => {
@@ -117,6 +120,7 @@ export default function App() {
     }).catch(console.error);
   }, [
     appStates.cc,
+    providers,
     config?.queues?.[config?.default_queue_id ?? ""]?.items[0]?.provider_id,
     config?.queues?.[config?.default_queue_id ?? ""]?.items[0]?.model_id,
     authMap,
@@ -130,13 +134,13 @@ export default function App() {
     const activeIdx = defaultQueueState?.active_idx ?? 0;
     const activeItem = defaultQueue?.items[activeIdx];
     const provider = activeItem
-      ? config.providers.find((p) => p.id === activeItem.provider_id)
+      ? providers.find((p) => p.id === activeItem.provider_id)
       : undefined;
     if (!provider) return;
     isHermesInjected(provider.id)
       .then((v) => setAppStates(prev => ({ ...prev, hermes: v })))
       .catch(console.error);
-  }, [config, queueStates]);
+  }, [config, providers, queueStates]);
 
   // Close edit panel when switching away from providers page
   useEffect(() => {
@@ -287,13 +291,9 @@ export default function App() {
     setAuthMap((prev) => ({ ...prev, [providerId]: key.trim().length > 0 }));
   }
 
-  function addModel(providerId: string, modelId: string) {
-    const providers = config!.providers.map((p) =>
-      p.id !== providerId
-        ? p
-        : { ...p, models: [...p.models, { id: modelId, name: modelId, is_custom: true }] }
-    );
-    updateAndSave({ ...config!, providers });
+  async function addModel(providerId: string, modelId: string) {
+    await addCustomModelToBuiltin(providerId, { id: modelId, name: modelId, is_custom: true });
+    setProviders(await getProviders());
     setAddingModelProviderId(null);
   }
 
@@ -342,7 +342,7 @@ export default function App() {
 
   async function addProvider(input: AddProviderPayload) {
     const nextProvider: Provider = {
-      id: createProviderId(input.name, config!.providers),
+      id: createProviderId(input.name, providers),
       name: input.name,
       anthropic_url: input.anthropicUrl,
       openai_url: input.openaiUrl,
@@ -354,11 +354,12 @@ export default function App() {
         name: modelId,
         is_custom: true,
       })),
-      priority: Math.max(0, ...config!.providers.map((provider) => provider.priority)) + 1,
+      priority: Math.max(0, ...providers.map((provider) => provider.priority)) + 1,
       is_custom: true,
     };
 
-    updateAndSave({ ...config!, providers: [...config!.providers, nextProvider] });
+    await saveCustomProvider(nextProvider);
+    setProviders(await getProviders());
     if (input.apiKey.trim().length > 0) {
       await saveAuth(nextProvider.id, input.apiKey);
       setAuthMap((prev) => ({ ...prev, [nextProvider.id]: true }));
@@ -366,11 +367,11 @@ export default function App() {
   }
 
   function handleDeleteProvider(providerId: string) {
-    deleteProvider(providerId).then(() => {
+    deleteCustomProvider(providerId).then(async () => {
+      setProviders(await getProviders());
+      // 从所有队列中移除该供应商的项目
       setConfig((prev) => {
         if (!prev) return prev;
-        const updatedProviders = prev.providers.filter((p) => p.id !== providerId);
-        // 从所有队列中移除该供应商的项目
         const updatedQueues = { ...prev.queues };
         for (const queueId in updatedQueues) {
           updatedQueues[queueId] = {
@@ -378,7 +379,11 @@ export default function App() {
             items: updatedQueues[queueId].items.filter((item) => item.provider_id !== providerId),
           };
         }
-        return { ...prev, providers: updatedProviders, queues: updatedQueues };
+        // 更新队列
+        for (const queueId in updatedQueues) {
+          updateQueue(queueId, updatedQueues[queueId].name, updatedQueues[queueId].items).catch(console.error);
+        }
+        return { ...prev, queues: updatedQueues };
       });
       setAuthMap((prev) => {
         const next = { ...prev };
@@ -392,14 +397,11 @@ export default function App() {
   }
 
   function handleDeleteModel(providerId: string, modelId: string) {
-    deleteModel(providerId, modelId).then(() => {
+    deleteCustomModelFromBuiltin(providerId, modelId).then(async () => {
+      setProviders(await getProviders());
+      // 从所有队列中移除该模型
       setConfig((prev) => {
         if (!prev) return prev;
-        const updatedProviders = prev.providers.map((p) => {
-          if (p.id !== providerId) return p;
-          return { ...p, models: p.models.filter((m) => m.id !== modelId) };
-        });
-        // 从所有队列中移除该模型
         const updatedQueues = { ...prev.queues };
         for (const queueId in updatedQueues) {
           updatedQueues[queueId] = {
@@ -409,7 +411,11 @@ export default function App() {
             ),
           };
         }
-        return { ...prev, providers: updatedProviders, queues: updatedQueues };
+        // 更新队列
+        for (const queueId in updatedQueues) {
+          updateQueue(queueId, updatedQueues[queueId].name, updatedQueues[queueId].items).catch(console.error);
+        }
+        return { ...prev, queues: updatedQueues };
       });
     }).catch((e) => {
       alert(`删除失败: ${e}`);
@@ -418,11 +424,11 @@ export default function App() {
   }
 
   const editingKeyProvider = editingKeyProviderId
-    ? config.providers.find((p) => p.id === editingKeyProviderId) ?? null
+    ? providers.find((p) => p.id === editingKeyProviderId) ?? null
     : null;
 
   const addingModelProvider = addingModelProviderId
-    ? config.providers.find((p) => p.id === addingModelProviderId) ?? null
+    ? providers.find((p) => p.id === addingModelProviderId) ?? null
     : null;
 
   // Use default queue's active item for global status display
@@ -431,7 +437,7 @@ export default function App() {
   const defaultActiveIdx = defaultQueueState?.active_idx ?? 0;
   const activeQueueItem = defaultQueue?.items[defaultActiveIdx] ?? defaultQueue?.items[0];
   const activeProvider = activeQueueItem
-    ? config.providers.find((p) => p.id === activeQueueItem.provider_id)
+    ? providers.find((p) => p.id === activeQueueItem.provider_id)
     : undefined;
   const activeModel = activeProvider?.models.find((m) => m.id === activeQueueItem?.model_id);
   const isActive = !!(activeProvider && activeModel);
@@ -456,7 +462,7 @@ export default function App() {
         {/* Page content */}
         {currentPage === "providers" && (
           <ProvidersPage
-            providers={config.providers}
+            providers={providers}
             authMap={authMap}
             onAddToQueue={addToEditPanel}
             onConfigKey={(id) => setEditingKeyProviderId(id)}
@@ -502,7 +508,7 @@ export default function App() {
                   if (appStates.cc) {
                     const dq = next.queues[next.default_queue_id];
                     const head = dq?.items[0];
-                    const p = head ? next.providers.find((pr) => pr.id === head.provider_id) : undefined;
+                    const p = head ? providers.find((pr) => pr.id === head.provider_id) : undefined;
                     if (p) {
                       const apiKey = await getAuth(p.id);
                       if (apiKey && apiKey.trim().length > 0) {
