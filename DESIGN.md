@@ -14,15 +14,46 @@ colors:
   hairline: "#e6e6e6"
   hairline-soft: "#f1f1f1"
   surface-soft: "#f7f7f5"
-  block-lime: "#dceeb1"
-  block-lilac: "#c5b0f4"
-  block-cream: "#f4ecd6"
-  block-pink: "#efd4d4"
-  block-mint: "#c8e6cd"
-  block-coral: "#f3c9b6"
-  block-navy: "#1f1d3d"
+  
+  # ── Primary hierarchy (基于 #00a854 绿色) ──
+  fm-primary: "#00a854"
+  fm-primary-hover: "#009649"
+  fm-primary-active: "#00843f"
+  fm-primary-subtle: "#e8f5e9"
+  fm-primary-ghost: "rgba(0,168,84,0.08)"
+  fm-primary-border: "rgba(0,168,84,0.30)"
+  fm-primary-ring: "rgba(0,168,84,0.12)"
+  
+  # ── Semantic colors (语义色) ──
+  fm-success: "#00a854"
+  fm-success-subtle: "#e8f5e9"
+  fm-success-text: "#00843f"
+  fm-warning: "#f59e0b"
+  fm-warning-subtle: "#fef3c7"
+  fm-warning-text: "#b45309"
+  fm-error: "#ef4444"
+  fm-error-subtle: "#fee2e2"
+  fm-error-text: "#b91c1c"
+  fm-info: "#0ea5e9"
+  fm-info-subtle: "#e0f2fe"
+  fm-info-text: "#0369a1"
+  
+  # ── Color blocks (与绿色协调的色块) ──
+  fm-block-green: "#e8f5e9"
+  fm-block-mint: "#edfdf5"
+  fm-block-teal: "#e0f7f4"
+  fm-block-lime: "#f4fce3"
+  fm-block-sage: "#f5f5f0"
+  fm-block-lilac: "#f3f0ff"
+  fm-block-cream: "#fdf8ee"
+  fm-block-coral: "#fff3ee"
+  fm-block-navy: "#eff0ff"
+  
+  # ── Accent ──
   accent-magenta: "#ff3d8b"
-  semantic-success: "#1ea64a"
+  fm-magenta: "#ff3d8b"
+  fm-magenta-subtle: "#fff0f6"
+  
   overlay-scrim: "#000000"
 
 typography:

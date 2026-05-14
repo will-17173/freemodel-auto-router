@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { X, GripVertical, Check } from "lucide-react"
+import { X, GripVertical } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { QueueItem, Provider, QueueStateInfo, Queue } from "@/types"
 import {
@@ -161,28 +161,26 @@ export function QueuePage({
                 onClick={() => onSelectQueue(queue.id)}
               >
                 {queue.name}
+                {itemCount > 0 && (
+                  <Badge
+                    variant={exhaustedCount >= itemCount ? "destructive" : "secondary"}
+                    className="text-[10px] px-1 py-0 ml-1 shrink-0"
+                  >
+                    {exhaustedCount >= itemCount ? "尽" : itemCount}
+                  </Badge>
+                )}
               </span>
-              {!isDefault && (
+              {isDefault ? (
+                <Badge variant="default" className="text-[10px] px-1.5 py-0 shrink-0">当前</Badge>
+              ) : (
                 <Button
                   variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 shrink-0 hover:text-primary"
+                  size="sm"
+                  className="h-5 px-1.5 shrink-0 text-[10px] text-muted-foreground hover:text-primary"
                   onClick={() => onSetDefault(queue.id)}
-                  title="设为默认"
                 >
-                  <Check className="h-3 w-3" />
+                  设为当前
                 </Button>
-              )}
-              {isDefault && (
-                <Badge variant="default" className="text-[10px] px-1 py-0 shrink-0">默</Badge>
-              )}
-              {itemCount > 0 && (
-                <Badge
-                  variant={exhaustedCount >= itemCount ? "destructive" : "secondary"}
-                  className="text-[10px] px-1 py-0 shrink-0"
-                >
-                  {exhaustedCount >= itemCount ? "尽" : itemCount}
-                </Badge>
               )}
             </div>
           )

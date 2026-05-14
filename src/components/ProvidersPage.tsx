@@ -1,5 +1,5 @@
 import React from "react"
-import { Plus, Trash2, Zap, Loader2, Check, X } from "lucide-react"
+import { Plus, Trash2, Zap, Loader2, Check, X, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DraftQueuePanel } from "./DraftQueuePanel"
 import { testProviderConnection, type TestConnectionResult } from "@/api"
@@ -69,6 +69,20 @@ export function ProvidersPage({
 }: ProvidersPageProps) {
   // 测试连接状态管理
   const [testStates, setTestStates] = React.useState<Record<string, { status: TestStatus; result: TestConnectionResult | null }>>({})
+  // 模型列表展开状态管理
+  const [expandedProviders, setExpandedProviders] = React.useState<Record<string, boolean>>({})
+
+  const toggleExpand = (providerId: string) => {
+    setExpandedProviders(prev => ({
+      ...prev,
+      [providerId]: !prev[providerId]
+    }))
+  }
+
+  // 计算模型列表是否需要折叠（超过3行时折叠）
+  const MODELS_PER_ROW = 4  // 每行大约4个模型
+  const MAX_VISIBLE_ROWS = 2  // 折叠时最多显示2行
+  const MAX_VISIBLE_MODELS = MODELS_PER_ROW * MAX_VISIBLE_ROWS
 
   const handleTest = async (providerId: string) => {
     if (!authMap[providerId]) return
@@ -139,6 +153,14 @@ export function ProvidersPage({
                 <span className="font-semibold text-sm text-foreground">{provider.name}</span>
               </div>
               <div className="flex items-center gap-2">
+                {/* 添加模型按钮 */}
+                <button
+                  className="text-xs px-2 py-1 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                  onClick={() => onAddModel(provider.id)}
+                  title="添加模型"
+                >
+                  + 模型
+                </button>
                 {/* 测试连接按钮 */}
                 <button
                   onClick={() => handleTest(provider.id)}
@@ -196,41 +218,67 @@ export function ProvidersPage({
               </div>
             </div>
             {/* Models */}
-            <div className="flex flex-wrap gap-1.5">
-              {provider.models.map((model) => (
-                <div key={model.id} className="flex items-center gap-1">
-                  <button
-                    disabled={!authMap[provider.id] || !showDraftPanel}
-                    onClick={() => authMap[provider.id] && showDraftPanel && onAddToQueue(provider.id, model.id)}
-                    className={cn(
-                      "text-xs px-2.5 py-1 rounded-full border transition-colors inline-flex items-center gap-1",
-                      authMap[provider.id]
-                        ? showDraftPanel
-                          ? "border-[#22c55e]/40 bg-[#f0fce8] text-[#16a34a] hover:border-[#22c55e] hover:bg-[#dcfce7] cursor-pointer"
-                          : "border-[#22c55e]/30 bg-[#f0fce8]/70 text-[#16a34a]/80 cursor-not-allowed"
-                        : "border-border text-muted-foreground bg-muted/30 cursor-not-allowed opacity-60"
-                    )}
-                  >
-                    <span>{model.name}</span>
-                    {canDeleteModel(provider, model) && (
-                      <Trash2
-                        className="h-3 w-3 opacity-50 hover:opacity-100 hover:text-destructive transition-opacity cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDeleteModel(provider.id, model.id);
-                        }}
-                      />
-                    )}
-                  </button>
+            {(() => {
+              const isExpanded = expandedProviders[provider.id]
+              const needsCollapse = provider.models.length > MAX_VISIBLE_MODELS
+              const visibleModels = isExpanded ? provider.models : provider.models.slice(0, MAX_VISIBLE_MODELS)
+
+              return (
+                <div className="relative">
+                  <div className={cn(
+                    "flex flex-wrap gap-1.5 transition-all duration-200",
+                    !isExpanded && needsCollapse && "max-h-[60px] overflow-hidden"
+                  )}>
+                    {visibleModels.map((model) => (
+                      <div key={model.id} className="flex items-center gap-1">
+                        <button
+                          disabled={!authMap[provider.id] || !showDraftPanel}
+                          onClick={() => authMap[provider.id] && showDraftPanel && onAddToQueue(provider.id, model.id)}
+                          className={cn(
+                            "text-xs px-2.5 py-1 rounded-full border transition-colors inline-flex items-center gap-1",
+                            authMap[provider.id]
+                              ? showDraftPanel
+                                ? "border-[#22c55e]/40 bg-[#f0fce8] text-[#16a34a] hover:border-[#22c55e] hover:bg-[#dcfce7] cursor-pointer"
+                                : "border-[#22c55e]/30 bg-[#f0fce8]/70 text-[#16a34a]/80 cursor-not-allowed"
+                              : "border-border text-muted-foreground bg-muted/30 cursor-not-allowed opacity-60"
+                          )}
+                        >
+                          <span>{model.name}</span>
+                          {canDeleteModel(provider, model) && (
+                            <Trash2
+                              className="h-3 w-3 opacity-50 hover:opacity-100 hover:text-destructive transition-opacity cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onDeleteModel(provider.id, model.id);
+                              }}
+                            />
+                          )}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {/* 展开/收起按钮 */}
+                  {needsCollapse && (
+                    <button
+                      onClick={() => toggleExpand(provider.id)}
+                      className="mt-2 text-xs text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+                    >
+                      {isExpanded ? (
+                        <>
+                          <ChevronUp className="h-3.5 w-3.5" />
+                          收起
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDown className="h-3.5 w-3.5" />
+                          展开 ({provider.models.length - MAX_VISIBLE_MODELS} 更多)
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
-              ))}
-              <button
-                className="text-xs px-2.5 py-1 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                onClick={() => onAddModel(provider.id)}
-              >
-                + 模型
-              </button>
-            </div>
+              )
+            })()}
           </div>
         ))}
       </div>

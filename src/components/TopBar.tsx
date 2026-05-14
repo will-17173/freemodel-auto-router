@@ -1,4 +1,10 @@
 import { Switch } from "@/components/ui/switch"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils"
 import hermesImg from "@/assets/images/hermes.png"
 import openclawImg from "@/assets/images/openclaw.png"
@@ -74,12 +80,23 @@ export function TopBar({ port, isActive, appStates, onAppToggle }: TopBarProps) 
       </div>
 
       {/* App toggles */}
-      <div className="flex items-center gap-3">
-        <AppToggle id="cc" label="Claude Code" iconUrl={claudecodeImg} enabled={appStates.cc} disabled={!isActive} onToggle={(e) => onAppToggle("cc", e)} />
-        <AppToggle id="codex" label="Codex" iconUrl={codexImg} enabled={appStates.codex} disabled={!isActive} onToggle={(e) => onAppToggle("codex", e)} />
-        <AppToggle id="hermes" label="H" iconUrl={hermesImg} enabled={appStates.hermes} disabled={!isActive} onToggle={(e) => onAppToggle("hermes", e)} />
-        <AppToggle id="openclaw" label="OC" iconUrl={openclawImg} enabled={appStates.openclaw} disabled={!isActive} onToggle={(e) => onAppToggle("openclaw", e)} />
-      </div>
+      <TooltipProvider>
+        <div className="flex items-center gap-3">
+          <AppToggle id="cc" label="Claude Code" iconUrl={claudecodeImg} enabled={appStates.cc} disabled={!isActive} onToggle={(e) => onAppToggle("cc", e)} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="cursor-default">
+                <AppToggle id="codex" label="Codex" iconUrl={codexImg} enabled={false} disabled onToggle={() => {}} />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>开发中</p>
+            </TooltipContent>
+          </Tooltip>
+          <AppToggle id="hermes" label="H" iconUrl={hermesImg} enabled={appStates.hermes} disabled={!isActive} onToggle={(e) => onAppToggle("hermes", e)} />
+          <AppToggle id="openclaw" label="OC" iconUrl={openclawImg} enabled={appStates.openclaw} disabled={!isActive} onToggle={(e) => onAppToggle("openclaw", e)} />
+        </div>
+      </TooltipProvider>
     </div>
   )
 }
