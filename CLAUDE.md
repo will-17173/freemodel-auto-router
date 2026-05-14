@@ -52,14 +52,15 @@ Claude Code / Codex / Hermes / OpenClaw
 
 ### 前端（`src/`）
 
-- **`App.tsx`** — 唯一状态容器；管理多页面路由、队列状态、应用注入状态
-- **`api.ts`** — 封装所有 Tauri invoke 命令
-- **`types.ts`** — TypeScript 类型（与 Rust 结构体对应）
+- **`App.tsx`** — 唯一状态容器；管理多页面路由、队列编辑状态、应用注入状态
+- **`api.ts`` — 封装所有 Tauri invoke 命令
+- **`types.ts`` — TypeScript 类型（与 Rust 结构体对应）
 - **`components/`** — 多页面结构：
-  - `Sidebar.tsx` — 左侧导航（providers / queue / logs / settings）
+  - `Sidebar.tsx` — 左侧导航（providers / logs / settings）
   - `TopBar.tsx` — 顶部状态栏 + 应用注入开关（CC / Codex / Hermes / OpenClaw）
-  - `ProvidersPage.tsx` — 供应商卡片网格 + DraftQueuePanel
-  - `QueuePage.tsx` — 多队列管理（拖拽排序）
+  - `ProvidersPage.tsx` — 供应商卡片网格 + 队列标签栏 + QueueEditPanel
+  - `QueueTabs.tsx` — 队列标签栏组件
+  - `QueueEditPanel.tsx` — 队列编辑面板（新建/编辑模式）
   - `LogsPage.tsx` — 代理日志
   - `SettingsPage.tsx` — 重试/端口配置
   - `AddProviderModal.tsx` / `AddModelModal.tsx` / `ApiKeyModal.tsx` — 输入弹窗
