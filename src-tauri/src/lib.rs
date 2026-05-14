@@ -7,6 +7,7 @@ mod config;
 mod proxy;
 mod proxy_log;
 mod router;
+mod providers;
 
 use std::sync::Arc;
 use tauri::Manager;
