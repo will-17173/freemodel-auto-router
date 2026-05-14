@@ -23,13 +23,9 @@ pub enum AuthScheme {
 pub struct Model {
     pub id: String,
     pub name: String,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     #[serde(default)]
     pub is_custom: bool,
 }
-
-fn default_true() -> bool { true }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Provider {
@@ -46,11 +42,13 @@ pub struct Provider {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auth_scheme: Option<AuthScheme>,
     pub models: Vec<Model>,
-    #[serde(default = "default_true")]
-    pub enabled: bool,
     pub priority: u32,
     #[serde(default)]
     pub is_custom: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub link: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 impl Provider {

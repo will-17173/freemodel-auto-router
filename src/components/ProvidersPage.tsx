@@ -3,6 +3,7 @@ import { Plus, Trash2, Zap, Loader2, Check, X, ChevronDown, ChevronUp } from "lu
 import { cn } from "@/lib/utils"
 import { DraftQueuePanel } from "./DraftQueuePanel"
 import { testProviderConnection, type TestConnectionResult } from "@/api"
+import { useToast } from "@/components/ui/toast"
 import type { Provider, DraftItem } from "@/types"
 
 // 测试状态类型
@@ -71,6 +72,7 @@ export function ProvidersPage({
   const [testStates, setTestStates] = React.useState<Record<string, { status: TestStatus; result: TestConnectionResult | null }>>({})
   // 模型列表展开状态管理
   const [expandedProviders, setExpandedProviders] = React.useState<Record<string, boolean>>({})
+  const { showToast } = useToast()
 
   const toggleExpand = (providerId: string) => {
     setExpandedProviders(prev => ({
@@ -96,11 +98,16 @@ export function ProvidersPage({
         ...prev,
         [providerId]: { status: result.success ? "success" : "error", result }
       }))
+      if (!result.success) {
+        showToast("error", result.message)
+      }
     } catch (e) {
+      const errorMessage = String(e)
       setTestStates(prev => ({
         ...prev,
-        [providerId]: { status: "error", result: { success: false, message: String(e), latency_ms: null } }
+        [providerId]: { status: "error", result: { success: false, message: errorMessage, latency_ms: null } }
       }))
+      showToast("error", errorMessage)
     }
   }
 

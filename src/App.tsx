@@ -17,6 +17,7 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
+import { ToastProvider } from "./components/ui/toast";
 import type { AppConfig, Provider, Queue, QueueItem, QueueStateInfo, ProviderSwitchedPayload, DraftItem } from "./types";
 import "./App.css";
 
@@ -316,7 +317,7 @@ export default function App() {
     const providers = config!.providers.map((p) =>
       p.id !== providerId
         ? p
-        : { ...p, models: [...p.models, { id: modelId, name: modelId, enabled: true, is_custom: true }] }
+        : { ...p, models: [...p.models, { id: modelId, name: modelId, is_custom: true }] }
     );
     updateAndSave({ ...config!, providers });
     setAddingModelProviderId(null);
@@ -377,10 +378,8 @@ export default function App() {
       models: input.modelIds.map((modelId) => ({
         id: modelId,
         name: modelId,
-        enabled: true,
         is_custom: true,
       })),
-      enabled: true,
       priority: Math.max(0, ...config!.providers.map((provider) => provider.priority)) + 1,
       is_custom: true,
     };
@@ -465,6 +464,7 @@ export default function App() {
 
 
   return (
+    <ToastProvider>
     <div className="h-screen flex bg-background text-foreground">
       {/* Sidebar */}
       <Sidebar currentPage={currentPage} onPageChange={setCurrentPage} />
@@ -577,5 +577,6 @@ export default function App() {
       )}
 
     </div>
+    </ToastProvider>
   );
 }

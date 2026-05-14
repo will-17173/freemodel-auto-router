@@ -23,8 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-cc-switch/
 .superpowers/
 auth.json
-config.json
 .atomcode/

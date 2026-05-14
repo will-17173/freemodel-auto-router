@@ -4,7 +4,6 @@ export type AuthScheme = "Bearer" | "ApiKey";
 export interface Model {
   id: string;
   name: string;
-  enabled: boolean;
   is_custom?: boolean;
 }
 
@@ -17,9 +16,10 @@ export interface Provider {
   protocol: Protocol;
   auth_scheme?: AuthScheme;
   models: Model[];
-  enabled: boolean;
   priority: number;
   is_custom?: boolean;
+  link?: string;
+  description?: string;
 }
 
 export interface RetryConfig {

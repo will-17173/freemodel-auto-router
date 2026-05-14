@@ -7,6 +7,7 @@ import {
   FileText,
   Settings,
 } from "lucide-react"
+import logoImg from "@/assets/images/logo.png"
 
 export type PageId = "providers" | "queue" | "logs" | "settings"
 
@@ -31,9 +32,12 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   return (
     <div className="w-[240px] h-full bg-secondary border-r border-border flex flex-col shrink-0">
       {/* Logo */}
-      <div className="p-5 pb-4">
-        <div className="font-semibold text-base text-foreground">freemodel</div>
-        <div className="text-xs text-muted-foreground">auto-router</div>
+      <div className="p-5 pb-4 flex items-center gap-3">
+        <img src={logoImg} alt="freemodel-auto-router" className="h-12 w-12 rounded-lg" />
+        <div className="leading-[1.15]">
+          <div className="font-semibold text-base text-foreground">freemodel</div>
+          <div className="text-xs text-muted-foreground -mt-0.5">auto-router</div>
+        </div>
       </div>
 
       {/* Menu items */}
