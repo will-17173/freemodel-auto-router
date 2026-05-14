@@ -1,0 +1,414 @@
+{
+  "version": 1778753036,
+  "format_version": 1,
+  "providers": [
+    {
+      "id": "openrouter",
+      "name": "OpenRouter",
+      "anthropic_url": "https://openrouter.ai/api",
+      "openai_url": "https://openrouter.ai/api",
+      "dual_protocol": true,
+      "protocol": "Anthropic",
+      "auth_scheme": "Bearer",
+      "models": [
+        {
+          "id": "nvidia/nemotron-3-super-120b-a12b:free",
+          "name": "NVIDIA: Nemotron 3 Super",
+          "is_custom": false
+        },
+        {
+          "id": "poolside/laguna-m.1:free",
+          "name": "Poolside: Laguna M.1",
+          "is_custom": false
+        },
+        {
+          "id": "inclusionai/ring-2.6-1t:free",
+          "name": "inclusionAI: Ring-2.6-1T",
+          "is_custom": false
+        },
+        {
+          "id": "openai/gpt-oss-120b:free",
+          "name": "OpenAI: gpt-oss-120b",
+          "is_custom": false
+        },
+        {
+          "id": "z-ai/glm-4.5-air:free",
+          "name": "Z.ai: GLM 4.5 Air",
+          "is_custom": false
+        },
+        {
+          "id": "minimax/minimax-m2.5:free",
+          "name": "MiniMax: MiniMax M2.5",
+          "is_custom": false
+        },
+        {
+          "id": "nvidia/nemotron-3-nano-30b-a3b:free",
+          "name": "NVIDIA: Nemotron 3 Nano 30B A3B",
+          "is_custom": false
+        },
+        {
+          "id": "poolside/laguna-xs.2:free",
+          "name": "Poolside: Laguna XS.2",
+          "is_custom": false
+        },
+        {
+          "id": "openai/gpt-oss-20b:free",
+          "name": "OpenAI: gpt-oss-20b",
+          "is_custom": false
+        },
+        {
+          "id": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+          "name": "NVIDIA: Nemotron 3 Nano Omni",
+          "is_custom": false
+        },
+        {
+          "id": "google/gemma-4-31b-it:free",
+          "name": "Google: Gemma 4 31B",
+          "is_custom": false
+        },
+        {
+          "id": "nvidia/nemotron-nano-12b-v2-vl:free",
+          "name": "NVIDIA: Nemotron Nano 12B 2 VL",
+          "is_custom": false
+        },
+        {
+          "id": "nvidia/nemotron-nano-9b-v2:free",
+          "name": "NVIDIA: Nemotron Nano 9B V2",
+          "is_custom": false
+        },
+        {
+          "id": "baidu/cobuddy:free",
+          "name": "Baidu Qianfan: CoBuddy",
+          "is_custom": false
+        },
+        {
+          "id": "google/gemma-4-26b-a4b-it:free",
+          "name": "Google: Gemma 4 26B A4B",
+          "is_custom": false
+        },
+        {
+          "id": "qwen/qwen3-coder:free",
+          "name": "Qwen: Qwen3 Coder 480B A35B",
+          "is_custom": false
+        },
+        {
+          "id": "nvidia/llama-nemotron-embed-vl-1b-v2",
+          "name": "NVIDIA: Llama Nemotron Embed VL 1B V2",
+          "is_custom": false
+        },
+        {
+          "id": "qwen/qwen3-next-80b-a3b-instruct:free",
+          "name": "Qwen: Qwen3 Next 80B A3B Instruct",
+          "is_custom": false
+        },
+        {
+          "id": "arcee-ai/trinity-large-thinking:free",
+          "name": "Arcee AI: Trinity Large Thinking",
+          "is_custom": false
+        },
+        {
+          "id": "meta-llama/llama-3.3-70b-instruct:free",
+          "name": "Meta: Llama 3.3 70B Instruct",
+          "is_custom": false
+        },
+        {
+          "id": "liquid/lfm-2.5-1.2b-thinking:free",
+          "name": "LiquidAI: LFM2.5-1.2B-Thinking",
+          "is_custom": false
+        },
+        {
+          "id": "liquid/lfm-2.5-1.2b-instruct:free",
+          "name": "LiquidAI: LFM2.5-1.2B-Instruct",
+          "is_custom": false
+        },
+        {
+          "id": "baidu/qianfan-ocr-fast:free",
+          "name": "Baidu: Qianfan-OCR-Fast",
+          "is_custom": false
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash:free",
+          "name": "DeepSeek: DeepSeek V4 Flash",
+          "is_custom": false
+        },
+        {
+          "id": "cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+          "name": "Venice: Uncensored",
+          "is_custom": false
+        },
+        {
+          "id": "nousresearch/hermes-3-llama-3.1-405b:free",
+          "name": "Nous: Hermes 3 405B Instruct",
+          "is_custom": false
+        },
+        {
+          "id": "meta-llama/llama-3.2-3b-instruct:free",
+          "name": "Meta: Llama 3.2 3B Instruct",
+          "is_custom": false
+        }
+      ],
+      "priority": 100,
+      "is_custom": false
+    },
+    {
+      "id": "modelscope",
+      "name": "魔搭 ModelScope",
+      "anthropic_url": "https://api-inference.modelscope.cn",
+      "openai_url": "https://api-inference.modelscope.cn/v1",
+      "dual_protocol": true,
+      "protocol": "Anthropic",
+      "auth_scheme": "ApiKey",
+      "models": [
+        {
+          "id": "inclusionAI/Ling-2.6-1T",
+          "name": "inclusionAI: Ling-2.6-1T",
+          "is_custom": false
+        },
+        {
+          "id": "LongCat-Flash-Lite",
+          "name": "meituan-longcat/LongCat-Flash-Lite",
+          "is_custom": false
+        },
+        {
+          "id": "inclusionAI/Ling-2.6-flash",
+          "name": "Ling-2.6-flash",
+          "is_custom": false
+        },
+        {
+          "id": "ZhipuAI/GLM-4.7-Flash",
+          "name": "GLM-4.7-Flash",
+          "is_custom": false
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V3.2",
+          "name": "DeepSeek-V3.2",
+          "is_custom": false
+        },
+        {
+          "id": "ZhipuAI/GLM-5",
+          "name": "GLM-5",
+          "is_custom": false
+        },
+        {
+          "id": "Qwen/Qwen3-32B",
+          "name": "千问3-32B",
+          "is_custom": false
+        },
+        {
+          "id": "千问3-8B",
+          "name": "Qwen/Qwen3-8B",
+          "is_custom": false
+        },
+        {
+          "id": "",
+          "name": "",
+          "is_custom": false
+        },
+        {
+          "id": "ZhipuAI/GLM-5.1",
+          "name": "GLM-5.1",
+          "is_custom": false
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Pro",
+          "name": "DeepSeek-V4-Pro",
+          "is_custom": false
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Flash",
+          "name": "DeepSeek-V4-Flash",
+          "is_custom": false
+        }
+      ],
+      "priority": 80,
+      "is_custom": false
+    },
+    {
+      "id": "longcat",
+      "name": "美团 LongCat",
+      "anthropic_url": "https://api.longcat.chat/anthropic",
+      "openai_url": "https://api.longcat.chat/openai",
+      "dual_protocol": true,
+      "protocol": "Anthropic",
+      "auth_scheme": "Bearer",
+      "models": [
+        {
+          "id": "LongCat-Flash-Chat",
+          "name": "LongCat Flash Chat",
+          "is_custom": false
+        },
+        {
+          "id": "LongCat-Flash-Thinking",
+          "name": "LongCat Flash Thinking",
+          "is_custom": false
+        },
+        {
+          "id": "LongCat-Flash-Thinking-2601",
+          "name": "LongCat Flash Thinking 2601",
+          "is_custom": false
+        },
+        {
+          "id": "LongCat-Flash-Lite",
+          "name": "LongCat Flash Lite",
+          "is_custom": false
+        },
+        {
+          "id": "LongCat-2.0-Preview",
+          "name": "LongCat 2.0 Preview",
+          "is_custom": false
+        }
+      ],
+      "priority": 90,
+      "is_custom": false
+    },
+    {
+      "id": "siliconflow",
+      "name": "硅基流动",
+      "anthropic_url": "https://api.siliconflow.cn",
+      "openai_url": "https://api.siliconflow.cn/v1",
+      "dual_protocol": true,
+      "protocol": "Anthropic",
+      "auth_scheme": "Bearer",
+      "models": [
+        {
+          "id": "deepseek-ai/DeepSeek-V4-Flash",
+          "name": "DeepSeek V4 Flash",
+          "is_custom": false
+        },
+        {
+          "id": "Pro/moonshotai/Kimi-K2.6",
+          "name": "Kimi K2.6",
+          "is_custom": false
+        },
+        {
+          "id": "Pro/zai-org/GLM-5.1",
+          "name": "GLM 5.1",
+          "is_custom": false
+        },
+        {
+          "id": "MiniMaxAI/MiniMax-M2.5",
+          "name": "MiniMax M2.5",
+          "is_custom": false
+        },
+        {
+          "id": "Pro/moonshotai/Kimi-K2.5",
+          "name": "Kimi K2.5",
+          "is_custom": false
+        },
+        {
+          "id": "deepseek-ai/DeepSeek-V3.2",
+          "name": "DeepSeek V3.2",
+          "is_custom": false
+        }
+      ],
+      "priority": 70,
+      "is_custom": false
+    },
+    {
+      "id": "sensenova",
+      "name": "商汤 SenseNova",
+      "anthropic_url": "https://token.sensenova.cn",
+      "openai_url": "https://token.sensenova.cn/v1",
+      "dual_protocol": true,
+      "protocol": "Anthropic",
+      "auth_scheme": "Bearer",
+      "models": [
+        {
+          "id": "sensenova-6.7-flash-lite",
+          "name": "SenseNova 6.7 Flash Lite",
+          "is_custom": false
+        },
+        {
+          "id": "deepseek-v4-flash",
+          "name": "DeepSeek V4 Flash",
+          "is_custom": false
+        }
+      ],
+      "priority": 50,
+      "is_custom": false
+    },
+    {
+      "id": "vercel-ai-gateway",
+      "name": "Vercel AI Gateway",
+      "anthropic_url": "https://ai-gateway.vercel.sh",
+      "openai_url": "https://ai-gateway.vercel.sh",
+      "dual_protocol": true,
+      "protocol": "Anthropic",
+      "auth_scheme": "Bearer",
+      "models": [
+        {
+          "id": "google/gemini-3.1-flash-lite",
+          "name": "Google Gemini 3.1 Flash Lite",
+          "is_custom": false
+        },
+        {
+          "id": "google/gemini-3.1-pro-preview",
+          "name": "Google Gemini 3.1 Pro Preview",
+          "is_custom": false
+        },
+        {
+          "id": "anthropic/claude-opus-4.7",
+          "name": "Claude Opus 4.7",
+          "is_custom": false
+        },
+        {
+          "id": "anthropic/claude-sonnet-4.6",
+          "name": "Claude Sonnet 4.6",
+          "is_custom": false
+        },
+        {
+          "id": "openai/gpt-5.4-mini",
+          "name": "GPT 5.4 Mini",
+          "is_custom": false
+        },
+        {
+          "id": "openai/gpt-5.5",
+          "name": "GPT 5.5",
+          "is_custom": false
+        },
+        {
+          "id": "zai/glm-5.1",
+          "name": "GLM 5.1",
+          "is_custom": false
+        },
+        {
+          "id": "zai/glm-5v-turbo",
+          "name": "GLM 5V Turbo",
+          "is_custom": false
+        },
+        {
+          "id": "zai/glm-5",
+          "name": "GLM 5",
+          "is_custom": false
+        },
+        {
+          "id": "deepseek/deepseek-v4-flash",
+          "name": "DeepSeek V4 Flash",
+          "is_custom": false
+        },
+        {
+          "id": "deepseek/deepseek-v4-pro",
+          "name": "DeepSeek V4 Pro",
+          "is_custom": false
+        },
+        {
+          "id": "moonshotai/kimi-k2.6",
+          "name": "Kimi K2.6",
+          "is_custom": false
+        },
+        {
+          "id": "moonshotai/kimi-k2.5",
+          "name": "Kimi K2.5",
+          "is_custom": false
+        },
+        {
+          "id": "minimax/minimax-m2.7",
+          "name": "MiniMax M2.7",
+          "is_custom": false
+        }
+      ],
+      "priority": 60,
+      "is_custom": false
+    }
+  ]
+}
