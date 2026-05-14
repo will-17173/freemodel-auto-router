@@ -78,7 +78,7 @@ impl RouterState {
             .collect();
         Self {
             queues,
-            providers: cfg.providers.clone(),
+            providers: vec![],
             retry: cfg.retry.clone(),
             auth_map: HashMap::new(),
             app_mapping: cfg.app_mapping.clone(),
@@ -94,7 +94,27 @@ impl RouterState {
             .collect();
         Self {
             queues,
-            providers: cfg.providers.clone(),
+            providers: vec![],
+            retry: cfg.retry.clone(),
+            auth_map: auth,
+            app_mapping: cfg.app_mapping.clone(),
+            default_queue_id: cfg.default_queue_id.clone(),
+        }
+    }
+
+    pub fn from_config_with_providers(
+        cfg: &AppConfig,
+        providers: Vec<Provider>,
+        auth: HashMap<String, String>,
+    ) -> Self {
+        let queues: HashMap<String, QueueState> = cfg
+            .queues
+            .iter()
+            .map(|(id, queue)| (id.clone(), QueueState::from_items(queue.items.clone())))
+            .collect();
+        Self {
+            queues,
+            providers,
             retry: cfg.retry.clone(),
             auth_map: auth,
             app_mapping: cfg.app_mapping.clone(),
@@ -108,11 +128,23 @@ impl RouterState {
             .iter()
             .map(|(id, queue)| (id.clone(), QueueState::from_items(queue.items.clone())))
             .collect();
-        self.providers = cfg.providers.clone();
+        // providers managed separately, not updated here
         self.retry = cfg.retry.clone();
         self.app_mapping = cfg.app_mapping.clone();
         self.default_queue_id = cfg.default_queue_id.clone();
         // auth_map stays unchanged
+    }
+
+    pub fn replace_config_and_providers(&mut self, cfg: &AppConfig, providers: Vec<Provider>) {
+        self.queues = cfg
+            .queues
+            .iter()
+            .map(|(id, queue)| (id.clone(), QueueState::from_items(queue.items.clone())))
+            .collect();
+        self.providers = providers;
+        self.retry = cfg.retry.clone();
+        self.app_mapping = cfg.app_mapping.clone();
+        self.default_queue_id = cfg.default_queue_id.clone();
     }
 
     pub fn update_auth(&mut self, auth: HashMap<String, String>) {
@@ -286,6 +318,14 @@ pub fn new_router_with_auth(cfg: &AppConfig, auth: HashMap<String, String>) -> S
     Arc::new(RwLock::new(RouterState::from_config_with_auth(cfg, auth)))
 }
 
+pub fn new_router_with_providers(
+    cfg: &AppConfig,
+    providers: Vec<Provider>,
+    auth: HashMap<String, String>,
+) -> SharedRouter {
+    Arc::new(RwLock::new(RouterState::from_config_with_providers(cfg, providers, auth)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,12 +353,10 @@ mod tests {
     }
 
     fn make_config(
-        providers: Vec<Provider>,
         queues: HashMap<String, Queue>,
         app_mapping: Vec<AppMapping>,
     ) -> AppConfig {
         AppConfig {
-            providers,
             retry: RetryConfig::default(),
             queues,
             app_mapping,
@@ -360,13 +398,10 @@ mod tests {
             },
         );
 
-        let cfg = make_config(
-            vec![make_provider("p1", "m1"), make_provider("p2", "m2")],
-            queues,
-            vec![],
-        );
+        let providers = vec![make_provider("p1", "m1"), make_provider("p2", "m2")];
+        let cfg = make_config(queues, vec![]);
 
-        let router = RouterState::from_config(&cfg);
+        let router = RouterState::from_config_with_providers(&cfg, providers, HashMap::new());
         assert_eq!(router.queues.len(), 2);
 
         let (p, m) = router.active_entry_for_queue("default").unwrap();
@@ -387,7 +422,6 @@ mod tests {
         );
 
         let cfg = make_config(
-            vec![],
             queues,
             vec![AppMapping {
                 app_id: "claude-code".to_string(),
@@ -401,7 +435,7 @@ mod tests {
             }],
         );
 
-        let router = RouterState::from_config(&cfg);
+        let router = RouterState::from_config_with_providers(&cfg, vec![], HashMap::new());
 
         let mut headers = axum::http::HeaderMap::new();
         headers.insert(
@@ -433,14 +467,11 @@ mod tests {
             },
         );
 
-        let mut cfg = make_config(
-            vec![make_provider("p1", "m1"), make_provider("p2", "m2")],
-            queues,
-            vec![],
-        );
+        let providers = vec![make_provider("p1", "m1"), make_provider("p2", "m2")];
+        let mut cfg = make_config(queues, vec![]);
         cfg.retry = RetryConfig { max_retries: 1, retry_delay_secs: 0 };
 
-        let mut router = RouterState::from_config(&cfg);
+        let mut router = RouterState::from_config_with_providers(&cfg, providers, HashMap::new());
 
         // First failure: retry
         assert_eq!(router.record_failure_for_queue("default"), FailureAction::RetryCurrent);

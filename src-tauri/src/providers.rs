@@ -246,7 +246,13 @@ pub async fn sync_providers() -> (bool, bool) {
 /// 迁移旧配置：将 config.json 中的 providers 分离到新文件结构
 pub fn migrate_legacy_config(old_providers: Vec<Provider>) -> Result<()> {
     if old_providers.is_empty() {
-        return Ok(());
+        log::info!("[migrate] no legacy providers, creating default providers.json");
+        let providers_config = ProvidersConfig {
+            version: 0,
+            format_version: CURRENT_FORMAT_VERSION,
+            providers: load_builtin_providers(),
+        };
+        return save_providers(&providers_config);
     }
 
     log::info!("[migrate] migrating {} providers from legacy config", old_providers.len());
@@ -302,6 +308,27 @@ pub fn migrate_legacy_config(old_providers: Vec<Provider>) -> Result<()> {
 /// 检查是否需要迁移（providers.json 不存在时需要迁移）
 pub fn needs_migration() -> bool {
     !providers_path().exists()
+}
+
+/// 从旧 config.json 读取 providers 字段（迁移用）
+pub(crate) fn read_legacy_providers() -> Vec<Provider> {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("config.json");
+
+    let Ok(s) = fs::read_to_string(&path) else {
+        return vec![];
+    };
+
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&s) else {
+        return vec![];
+    };
+
+    json.get("providers")
+        .and_then(|v| serde_json::from_value::<Vec<Provider>>(v.clone()).ok())
+        .unwrap_or_default()
 }
 
 /// 添加或更新自定义供应商

@@ -147,7 +147,6 @@ fn default_queue_id() -> String { "default".to_string() }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
-    pub providers: Vec<Provider>,
     pub retry: RetryConfig,
     // 新字段
     #[serde(default = "default_queues")]
@@ -163,18 +162,10 @@ pub struct AppConfig {
     pub port: u16,
 }
 
-const BUILTIN_PROVIDERS_JSON: &str = include_str!("../builtin_providers.json");
-
-fn load_builtin_providers() -> Vec<Provider> {
-    serde_json::from_str(BUILTIN_PROVIDERS_JSON)
-        .expect("builtin_providers.json should be valid JSON")
-}
-
 impl Default for AppConfig {
     fn default() -> Self {
         Self {
             port: default_port(),
-            providers: load_builtin_providers(),
             retry: RetryConfig::default(),
             queues: default_queues(),
             app_mapping: vec![],
@@ -237,14 +228,22 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_openrouter_uses_anthropic_protocol_with_bearer_auth() {
-        let cfg = AppConfig::default();
-        let openrouter = cfg
-            .providers
-            .iter()
-            .find(|provider| provider.id == "openrouter")
-            .unwrap();
-
+    fn openrouter_uses_bearer_auth_scheme() {
+        // Test that provider with id "openrouter" and no explicit auth_scheme returns Bearer
+        let openrouter = Provider {
+            id: "openrouter".to_string(),
+            name: "OpenRouter".to_string(),
+            anthropic_url: "https://openrouter.ai/api".to_string(),
+            openai_url: String::new(),
+            dual_protocol: false,
+            protocol: Protocol::Anthropic,
+            auth_scheme: None,
+            models: vec![],
+            priority: 100,
+            is_custom: false,
+            link: None,
+            description: None,
+        };
         assert_eq!(openrouter.protocol, Protocol::Anthropic);
         assert_eq!(openrouter.effective_auth_scheme(), AuthScheme::Bearer);
     }
