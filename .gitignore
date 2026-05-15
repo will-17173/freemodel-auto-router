@@ -25,4 +25,4 @@ dist-ssr
 
 .superpowers/
 auth.json
-.atomcode/
+.atomcode/.claude/skills/changelog-generator-workspace/
