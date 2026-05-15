@@ -39,6 +39,8 @@ Claude Code / Codex / Hermes / OpenClaw
 
 | 文件 | 职责 |
 |---|---|
+| `providers.rs` | 内置供应商配置（OpenRouter、LongCat 等），从 config.rs 分离 |
+| `app_detection.rs` | 应用检测、分析追踪和队列管理模块 |
 | `config.rs` | `AppConfig` / `Provider` / `Queue` / `QueueItem` / `AppMapping` 结构体；多队列支持；读写 `config.json` |
 | `router.rs` | `RouterState` — 维护每个队列的 `active_idx` 和 `exhausted_indices`；`record_failure()` 切换逻辑 |
 | `proxy.rs` | axum HTTP 代理；`rewrite_model_field()` 替换请求体中的 `model` 字段；支持 `/anthropic` 和 `/openai` 端点 |
@@ -53,8 +55,8 @@ Claude Code / Codex / Hermes / OpenClaw
 ### 前端（`src/`）
 
 - **`App.tsx`** — 唯一状态容器；管理多页面路由、队列编辑状态、应用注入状态
-- **`api.ts`` — 封装所有 Tauri invoke 命令
-- **`types.ts`` — TypeScript 类型（与 Rust 结构体对应）
+- **api.ts** — 封装所有 Tauri invoke 命令
+- **types.ts** — TypeScript 类型（与 Rust 结构体对应）
 - **`components/`** — 多页面结构：
   - `Sidebar.tsx` — 左侧导航（providers / logs / settings）
   - `TopBar.tsx` — 顶部状态栏 + 应用注入开关（CC / Codex / Hermes / OpenClaw）
