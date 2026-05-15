@@ -53,6 +53,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(log::LevelFilter::Debug)
+                .build(),
+        )
         .manage(shared_router.clone())
         .manage(proxy_logs.clone())
         .setup(move |app| {
@@ -184,6 +189,7 @@ pub fn run() {
             add_custom_model_to_builtin_cmd,
             delete_custom_model_from_builtin_cmd,
             detect_app_installations_cmd,
+            check_update_cmd,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -1106,4 +1112,99 @@ fn migrate_config_files() {
             }
         }
     }
+}
+
+// ===== 版本检查 =====
+
+const CURRENT_VERSION: &str = env!("CARGO_PKG_VERSION");
+const GITHUB_REPO: &str = "will-17173/freemodel-auto-router";
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct UpdateInfo {
+    pub current_version: String,
+    pub latest_version: String,
+    pub has_update: bool,
+    pub release_url: String,
+    pub release_notes: Option<String>,
+}
+
+#[tauri::command]
+async fn check_update_cmd() -> Result<UpdateInfo, String> {
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .user_agent(format!("freemodel-auto-router/{}", CURRENT_VERSION))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let url = format!("https://api.github.com/repos/{}/releases/latest", GITHUB_REPO);
+
+    let response = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| format!("请求 GitHub API 失败: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("GitHub API 返回错误: {}", response.status()));
+    }
+
+    let release: serde_json::Value = response
+        .json()
+        .await
+        .map_err(|e| format!("解析响应失败: {}", e))?;
+
+    let latest_version = release["tag_name"]
+        .as_str()
+        .map(|s| s.strip_prefix('v').unwrap_or(s).to_string())
+        .unwrap_or_else(|| "未知".to_string());
+
+    let release_url = release["html_url"]
+        .as_str()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| format!("https://github.com/{}/releases", GITHUB_REPO));
+
+    let release_notes = release["body"].as_str().map(|s| s.to_string());
+
+    // 比较版本号（简单字符串比较，因为格式为 X.Y.Z）
+    let has_update = compare_versions(&latest_version, CURRENT_VERSION);
+
+    Ok(UpdateInfo {
+        current_version: CURRENT_VERSION.to_string(),
+        latest_version,
+        has_update,
+        release_url,
+        release_notes,
+    })
+}
+
+/// 比较版本号，返回 true 表示 latest > current（有更新）
+fn compare_versions(latest: &str, current: &str) -> bool {
+    let latest_parts: Vec<u32> = latest
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    let current_parts: Vec<u32> = current
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+
+    // 补齐到 3 位
+    let mut latest_vec = latest_parts;
+    let mut current_vec = current_parts;
+    while latest_vec.len() < 3 {
+        latest_vec.push(0);
+    }
+    while current_vec.len() < 3 {
+        current_vec.push(0);
+    }
+
+    for i in 0..3 {
+        if latest_vec[i] > current_vec[i] {
+            return true;
+        }
+        if latest_vec[i] < current_vec[i] {
+            return false;
+        }
+    }
+    false
 }

@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { AppConfig, ProxyLogEntry, Model, Provider, Queue, AppMapping, QueueStateInfo, QueueItem, AppInstallations } from "./types";
+import type { AppConfig, ProxyLogEntry, Model, Provider, Queue, AppMapping, QueueStateInfo, QueueItem, AppInstallations, UpdateInfo } from "./types";
 
 export const getConfig = (): Promise<AppConfig> => invoke("get_config");
 export const saveConfig = (cfg: AppConfig): Promise<void> => invoke("save_config_cmd", { cfg });
@@ -69,3 +69,6 @@ export const addCustomModelToBuiltin = (providerId: string, model: Model): Promi
   invoke("add_custom_model_to_builtin_cmd", { providerId, model });
 export const deleteCustomModelFromBuiltin = (providerId: string, modelId: string): Promise<void> =>
   invoke("delete_custom_model_from_builtin_cmd", { providerId, modelId });
+
+// Update check
+export const checkUpdate = (): Promise<UpdateInfo> => invoke("check_update_cmd");

@@ -72,6 +72,7 @@ export type ProxyLogLevel = "info" | "warn" | "error";
 
 export interface ProxyLogEntry {
   id: number;
+  request_id?: string;  // 用于关联同一请求的开始和结束
   timestamp_ms: number;
   level: ProxyLogLevel;
   message: string;
@@ -83,6 +84,8 @@ export interface ProxyLogEntry {
   output_tokens?: number;
   duration_ms?: number;
   request_headers?: Record<string, string>;
+  response_headers?: Record<string, string>;  // 新增响应头
+  is_final: boolean;  // true 表示请求完成，false 表示进行中
 }
 
 export interface ProviderSwitchedPayload {
@@ -98,7 +101,10 @@ export interface AppInstallInfo {
 }
 
 export interface AppInstallations {
+  cc: AppInstallInfo;
   codex: AppInstallInfo;
+  hermes: AppInstallInfo;
+  openclaw: AppInstallInfo;
 }
 
 // Draft item for queue creation panel (same structure as QueueItem)
@@ -115,4 +121,13 @@ export interface ProvidersConfig {
 export interface CustomProvidersConfig {
   custom_providers: Provider[];
   custom_models_in_builtin: Record<string, Model[]>;
+}
+
+// 版本更新信息
+export interface UpdateInfo {
+  current_version: string;
+  latest_version: string;
+  has_update: boolean;
+  release_url: string;
+  release_notes?: string;
 }
