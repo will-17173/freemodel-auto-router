@@ -68,8 +68,8 @@
   --radius: 0.625rem;
 
   /* Legacy fm-* tokens — light theme */
-  --fm-font-sans: "MonuTitl", "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
-  --fm-font-mono: "MonuTitl", "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
+  --fm-font-sans: "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
+  --fm-font-mono: "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
 
   /* Page layers */
   --fm-canvas:       #eef3f0;
@@ -196,6 +196,39 @@
 }
 
 * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+
+/* ── Global Scrollbar (macOS-style floating, reveal on hover) ── */
+
+/* 默认状态：滚动条隐藏 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: var(--fm-r-pill);
+}
+
+/* 有滚动内容的容器 hover 时显示滚动条 */
+*:hover::-webkit-scrollbar-thumb {
+  background: rgba(0, 168, 84, 0.25);
+}
+*:hover::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 168, 84, 0.45);
+}
+*:hover::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 168, 84, 0.6);
+}
+
+/* Firefox floating scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+*:hover {
+  scrollbar-color: rgba(0, 168, 84, 0.25) transparent;
+}
 
 @keyframes ping {
   75%, 100% { transform: scale(2.2); opacity: 0; }

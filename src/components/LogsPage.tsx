@@ -32,7 +32,16 @@ function formatTokens(n: number | undefined) {
   return n.toLocaleString()
 }
 
-function StatusBadge({ status }: { status: number | undefined }) {
+function StatusBadge({ status, isFinal }: { status: number | undefined; isFinal: boolean }) {
+  // 请求进行中
+  if (!isFinal) {
+    return (
+      <Badge className="text-[10px] px-1.5 py-0 bg-blue-500 hover:bg-blue-500 text-white animate-pulse">
+        进行中
+      </Badge>
+    )
+  }
+  // 请求完成
   if (status === undefined || status === null) return <span className="text-muted-foreground text-xs">-</span>
   if (status >= 200 && status < 300) {
     return <Badge className="text-[10px] px-1.5 py-0 bg-[var(--fm-success)] hover:bg-[var(--fm-success)] text-white">{status}</Badge>
@@ -43,19 +52,50 @@ function StatusBadge({ status }: { status: number | undefined }) {
   return <Badge variant="outline" className="text-[10px] px-1.5 py-0">{status}</Badge>
 }
 
-// 请求头详情展开组件
-function HeadersDetail({ headers }: { headers: Record<string, string> }) {
-  const entries = Object.entries(headers)
-  if (entries.length === 0) return <span className="text-muted-foreground">无请求头</span>
+// 请求头/响应头详情展开组件
+function HeadersDetail({
+  requestHeaders,
+  responseHeaders,
+}: {
+  requestHeaders?: Record<string, string>
+  responseHeaders?: Record<string, string>
+}) {
+  const reqEntries = requestHeaders ? Object.entries(requestHeaders) : []
+  const respEntries = responseHeaders ? Object.entries(responseHeaders) : []
 
   return (
-    <div className="bg-muted/50 rounded p-2 text-xs font-mono max-h-[200px] overflow-auto">
-      {entries.map(([key, value]) => (
-        <div key={key} className="flex gap-2 py-0.5">
-          <span className="text-muted-foreground shrink-0">{key}:</span>
-          <span className="break-all">{value}</span>
+    <div className="space-y-2">
+      {/* 请求头 */}
+      {reqEntries.length > 0 && (
+        <div>
+          <div className="text-xs text-muted-foreground mb-1 font-medium">请求头:</div>
+          <div className="bg-muted/50 rounded p-2 text-xs font-mono max-h-[150px] overflow-auto">
+            {reqEntries.map(([key, value]) => (
+              <div key={key} className="flex gap-2 py-0.5">
+                <span className="text-muted-foreground shrink-0">{key}:</span>
+                <span className="break-all">{value}</span>
+              </div>
+            ))}
+          </div>
         </div>
-      ))}
+      )}
+      {/* 响应头 */}
+      {respEntries.length > 0 && (
+        <div>
+          <div className="text-xs text-muted-foreground mb-1 font-medium">响应头:</div>
+          <div className="bg-blue-500/10 rounded p-2 text-xs font-mono max-h-[150px] overflow-auto">
+            {respEntries.map(([key, value]) => (
+              <div key={key} className="flex gap-2 py-0.5">
+                <span className="text-blue-600 shrink-0">{key}:</span>
+                <span className="break-all">{value}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {reqEntries.length === 0 && respEntries.length === 0 && (
+        <span className="text-muted-foreground">无请求/响应头</span>
+      )}
     </div>
   )
 }
@@ -110,19 +150,21 @@ export function LogsPage({ port: _port }: LogsPageProps) {
           <TableBody>
             {sortedLogs.map((log) => {
               const isExpanded = expandedIds.has(log.id)
-              const hasHeaders = log.request_headers && Object.keys(log.request_headers).length > 0
+              const hasRequestHeaders = log.request_headers && Object.keys(log.request_headers).length > 0
+              const hasResponseHeaders = log.response_headers && Object.keys(log.response_headers).length > 0
+              const hasAnyHeaders = hasRequestHeaders || hasResponseHeaders
               return (
                 <>
                   <TableRow
                     key={log.id}
-                    className={`${log.level === "error" ? "bg-destructive/5" : log.level === "warn" ? "bg-[var(--fm-warning-subtle)]" : ""} ${hasHeaders ? "cursor-pointer hover:bg-muted/50" : ""}`}
-                    onClick={hasHeaders ? () => toggleExpand(log.id) : undefined}
+                    className={`${log.level === "error" ? "bg-destructive/5" : log.level === "warn" ? "bg-[var(--fm-warning-subtle)]" : ""} ${hasAnyHeaders ? "cursor-pointer hover:bg-muted/50" : ""}`}
+                    onClick={hasAnyHeaders ? () => toggleExpand(log.id) : undefined}
                   >
                     <TableCell className="font-mono text-xs text-muted-foreground">
                       {formatTime(log.timestamp_ms)}
                     </TableCell>
                     <TableCell>
-                      <StatusBadge status={log.status} />
+                      <StatusBadge status={log.status} isFinal={log.is_final} />
                     </TableCell>
                     <TableCell className="text-sm truncate max-w-[130px]">
                       {log.provider ?? <span className="text-muted-foreground">-</span>}
@@ -131,28 +173,42 @@ export function LogsPage({ port: _port }: LogsPageProps) {
                       {log.model ?? <span className="text-muted-foreground">-</span>}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-right">
-                      {formatTokens(log.input_tokens)}
+                      {!log.is_final ? (
+                        <span className="text-blue-500 animate-pulse">...</span>
+                      ) : (
+                        formatTokens(log.input_tokens)
+                      )}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-right">
-                      {formatTokens(log.output_tokens)}
+                      {!log.is_final ? (
+                        <span className="text-blue-500 animate-pulse">...</span>
+                      ) : (
+                        formatTokens(log.output_tokens)
+                      )}
                     </TableCell>
                     <TableCell className="font-mono text-xs text-right">
-                      {formatDuration(log.duration_ms)}
+                      {!log.is_final ? (
+                        <span className="text-blue-500 animate-pulse">...</span>
+                      ) : (
+                        formatDuration(log.duration_ms)
+                      )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground max-w-[300px] truncate flex items-center gap-1">
                       {log.message}
-                      {hasHeaders && (
+                      {hasAnyHeaders && (
                         <span className="text-xs text-primary shrink-0">
                           {isExpanded ? " ▼" : " ▶"}
                         </span>
                       )}
                     </TableCell>
                   </TableRow>
-                  {isExpanded && log.request_headers && (
+                  {isExpanded && (hasRequestHeaders || hasResponseHeaders) && (
                     <TableRow key={`${log.id}-detail`} className="bg-muted/30">
                       <TableCell colSpan={8} className="p-2">
-                        <div className="text-xs text-muted-foreground mb-1">请求头详情:</div>
-                        <HeadersDetail headers={log.request_headers} />
+                        <HeadersDetail
+                          requestHeaders={log.request_headers}
+                          responseHeaders={log.response_headers}
+                        />
                       </TableCell>
                     </TableRow>
                   )}

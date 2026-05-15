@@ -1,8 +1,9 @@
 import React from "react"
-import { Plus, Trash2, Zap, Loader2, Check, X, ChevronDown, ChevronUp } from "lucide-react"
+import { Plus, Trash2, Zap, Loader2, Check, X, ChevronDown, ChevronUp, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { QueueTabs } from "./QueueTabs"
 import { QueueEditPanel } from "./QueueEditPanel"
+import { ProviderInfoModal } from "./ProviderInfoModal"
 import { testProviderConnection, type TestConnectionResult } from "@/api"
 import { useToast } from "@/components/ui/toast"
 import type { Provider, DraftItem, Queue, QueueStateInfo } from "@/types"
@@ -102,6 +103,8 @@ export function ProvidersPage({
   const [testStates, setTestStates] = React.useState<Record<string, { status: TestStatus; result: TestConnectionResult | null }>>({})
   // 模型列表展开状态管理
   const [expandedProviders, setExpandedProviders] = React.useState<Record<string, boolean>>({})
+  // info 弹窗显示状态
+  const [showInfoModal, setShowInfoModal] = React.useState(false)
   const { showToast } = useToast()
 
   const toggleExpand = (providerId: string) => {
@@ -172,7 +175,15 @@ export function ProvidersPage({
         )}>
           {/* Header */}
           <div className="flex items-center justify-between mb-5">
-            <h1 className="text-lg font-semibold">供应商</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-semibold">供应商</h1>
+              <button
+                onClick={() => setShowInfoModal(true)}
+                className="p-1 text-muted-foreground hover:text-primary transition-colors"
+              >
+                <Info className="h-4 w-4" />
+              </button>
+            </div>
             <button
               onClick={onAddProvider}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
@@ -363,6 +374,12 @@ export function ProvidersPage({
           onClose={onCloseEditPanel}
         />
       </div>
+
+      {/* 信息弹窗 */}
+      <ProviderInfoModal
+        open={showInfoModal}
+        onClose={() => setShowInfoModal(false)}
+      />
     </div>
   )
 }

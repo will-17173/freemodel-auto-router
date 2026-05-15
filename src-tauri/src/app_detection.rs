@@ -11,7 +11,10 @@ pub struct AppInstallInfo {
 
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct AppInstallations {
+    pub cc: AppInstallInfo,
     pub codex: AppInstallInfo,
+    pub hermes: AppInstallInfo,
+    pub openclaw: AppInstallInfo,
 }
 
 fn home_config_dir(name: &str) -> PathBuf {
@@ -51,7 +54,7 @@ fn detect_cli_app(command: &str, config_dir: &str) -> AppInstallInfo {
     let config_found = home_config_dir(config_dir).exists();
 
     AppInstallInfo {
-        installed: command_found || config_found,
+        installed: command_found, // 只依赖命令是否存在
         command_found,
         config_found,
         version,
@@ -60,6 +63,9 @@ fn detect_cli_app(command: &str, config_dir: &str) -> AppInstallInfo {
 
 pub fn detect_installations() -> AppInstallations {
     AppInstallations {
+        cc: detect_cli_app("claude", ".claude"),
         codex: detect_cli_app("codex", ".codex"),
+        hermes: detect_cli_app("hermes", ".hermes"),
+        openclaw: detect_cli_app("openclaw", ".openclaw"),
     }
 }

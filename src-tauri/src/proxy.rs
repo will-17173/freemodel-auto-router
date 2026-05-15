@@ -7,6 +7,7 @@ use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, Request, Response, StatusCode};
 use axum::routing::{any, get};
 use axum::{Json, Router};
+use futures::StreamExt;
 use http_body_util::BodyExt;
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -15,6 +16,107 @@ use tokio::sync::watch;
 pub enum RoutePrefix {
     Anthropic,
     OpenAI,
+}
+
+/// 追踪流式响应中的 token usage，支持跨 chunk 的 SSE 缓冲解析
+#[derive(Debug, Clone, Default)]
+struct UsageTracker {
+    input_tokens: Option<u64>,
+    output_tokens: Option<u64>,
+    buffer: String,
+}
+
+impl UsageTracker {
+    /// 解析累积的 SSE 数据，提取 usage 信息
+    /// Anthropic:
+    ///   - message_start: 包含 input_tokens
+    ///   - message_delta: 包含 output_tokens
+    /// OpenAI:
+    ///   - 最后一个 data chunk 包含 usage（如果 stream_options.include_usage: true）
+    fn parse_sse_chunk(&mut self, chunk: &str) {
+        // 将新 chunk 追加到缓冲区
+        self.buffer.push_str(chunk);
+
+        // 按双换行分隔符切分完整事件（支持 \n\n 或 \r\n\r\n）
+        while let Some(pos) = self.buffer.find("\n\n") {
+            let event_str = self.buffer[..pos].to_string();
+            // 跳过分隔符（可能是 \n\n 或 \r\n\r\n，这里简化处理）
+            let skip_len = if event_str.ends_with('\r') { 3 } else { 2 };
+            self.buffer = self.buffer[pos + skip_len..].to_string();
+
+            // 解析完整事件
+            if let Some((event_type, data)) = parse_sse_event(&event_str) {
+                log::debug!("[usage] event_type={}, data={}", event_type, data);
+                self.extract_usage(&event_type, data);
+            }
+        }
+    }
+
+    /// 从已解析的 SSE 事件中提取 usage
+    fn extract_usage(&mut self, event_type: &str, data: &str) {
+        if data == "[DONE]" {
+            return;
+        }
+
+        if let Ok(json) = serde_json::from_str::<serde_json::Value>(data) {
+            // Anthropic: message_start 包含 input_tokens（标准格式）
+            if event_type == "message_start" {
+                if let Some(usage) = json.get("message").and_then(|m| m.get("usage")) {
+                    if let Some(input) = usage.get("input_tokens").and_then(|v| v.as_u64()) {
+                        log::debug!("[usage] found input_tokens={} in message_start", input);
+                        self.input_tokens = Some(input);
+                    }
+                }
+            }
+            // Anthropic: message_delta 包含 output_tokens（标准格式）
+            // 注意：某些供应商（如美团 LongCat）也会把 input_tokens 放在这里
+            else if event_type == "message_delta" {
+                if let Some(usage) = json.get("usage") {
+                    // 提取 input_tokens（如果有的话，兼容非标准格式）
+                    if let Some(input) = usage.get("input_tokens").and_then(|v| v.as_u64()) {
+                        log::debug!("[usage] found input_tokens={} in message_delta", input);
+                        self.input_tokens = Some(input);
+                    }
+                    // 提取 output_tokens
+                    if let Some(output) = usage.get("output_tokens").and_then(|v| v.as_u64()) {
+                        log::debug!("[usage] found output_tokens={} in message_delta", output);
+                        self.output_tokens = Some(output);
+                    }
+                }
+            }
+            // OpenAI: data 事件中的 usage（最后一个 chunk）
+            else if event_type == "data" {
+                if let Some(usage) = json.get("usage") {
+                    if let Some(input) = usage.get("prompt_tokens").and_then(|v| v.as_u64()) {
+                        self.input_tokens = Some(input);
+                    }
+                    if let Some(output) = usage.get("completion_tokens").and_then(|v| v.as_u64()) {
+                        self.output_tokens = Some(output);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 解析 SSE 事件格式：`event: xxx\ndata: yyy`
+fn parse_sse_event(raw: &str) -> Option<(String, &str)> {
+    let mut event_type = None;
+    let mut data = None;
+
+    for line in raw.lines() {
+        if let Some(rest) = line.strip_prefix("event:") {
+            event_type = Some(rest.trim());
+        } else if let Some(rest) = line.strip_prefix("data:") {
+            data = Some(rest.trim());
+        }
+    }
+
+    match (event_type, data) {
+        (Some(evt), Some(d)) => Some((evt.to_string(), d)),
+        (None, Some(d)) => Some(("data".to_string(), d)), // 默认 event type
+        _ => None,
+    }
 }
 
 fn parse_route_prefix(path: &str) -> Option<(RoutePrefix, &str)> {
@@ -220,40 +322,35 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             model_id,
             protocol,
         );
-        state.logs.push(
+
+        // 请求开始时创建日志条目（is_final=false），显示"请求进行中"
+        let log_id = state.logs.create_request_log(
             LogLevel::Info,
-            "forwarding upstream",
+            "request",
             [
                 ("provider", provider_name.clone()),
                 ("model", model_id.clone()),
-                ("url", url.clone()),
             ],
+            Some(provider_name.clone()),
+            Some(model_id.clone()),
+            Some(inbound_headers_map.clone()),
         );
 
         let start_time = std::time::Instant::now();
         match req_builder.send().await {
             Ok(resp) => {
                 let status = resp.status().as_u16();
-                let duration_ms = start_time.elapsed().as_millis() as u64;
-                let input_tokens: Option<u64> = None;
-                let output_tokens: Option<u64> = None;
-                state.logs.push_detailed(
-                    if is_retryable_error(status) {
-                        LogLevel::Warn
-                    } else {
-                        LogLevel::Info
-                    },
-                    "upstream response",
-                    [("status", status.to_string())],
-                    Some(provider_name.clone()),
-                    Some(model_id.clone()),
-                    Some(status),
-                    input_tokens,
-                    output_tokens,
-                    Some(duration_ms),
-                    Some(inbound_headers_map.clone()),
-                );
+
+                // 用于追踪 usage 的共享 tracker
+                let usage_tracker = Arc::new(std::sync::Mutex::new(UsageTracker::default()));
+                let logs_clone = state.logs.clone();
+                let log_id_clone = log_id;
+
                 if is_retryable_error(status) {
+                    // 错误响应：更新已有的日志条目（无 token 统计和响应头）
+                    let duration_ms = start_time.elapsed().as_millis() as u64;
+                    state.logs.update_request_log(log_id, Some(status), None, None, Some(duration_ms), None);
+
                     let failure_action = {
                         let mut r = state.router.write().await;
                         r.record_failure_for_queue(&queue_id)
@@ -295,19 +392,60 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                     }
                 }
 
-                let _ = provider_name; // suppress unused warning
                 let resp_status = StatusCode::from_u16(status).unwrap_or(StatusCode::OK);
-
                 let mut builder = Response::builder().status(resp_status);
 
+                // 收集响应头用于日志记录
+                let response_headers_map: std::collections::BTreeMap<String, String> = resp
+                    .headers()
+                    .iter()
+                    .map(|(k, v)| {
+                        (
+                            k.as_str().to_string(),
+                            v.to_str().unwrap_or("[binary]").to_string(),
+                        )
+                    })
+                    .collect();
+
+                // 打印响应头，检查是否有 token 统计
                 for (key, value) in resp.headers().iter() {
+                    log::debug!("[proxy] response header: {} = {:?}", key, value);
                     if should_forward_response_header(key.as_str()) {
                         builder = builder.header(key.as_str(), value.clone());
                     }
                 }
 
+                // 创建追踪 usage 的 stream，并在流结束时更新日志
                 let stream = resp.bytes_stream();
-                let body = Body::from_stream(stream);
+                let usage_tracker_clone = usage_tracker.clone();
+                let response_headers_clone = response_headers_map.clone();
+                let tracked_stream = stream
+                    .inspect(move |chunk_result: &Result<bytes::Bytes, reqwest::Error>| {
+                        // 解析 SSE 事件提取 usage（支持跨 chunk 缓冲）
+                        if let Ok(chunk) = chunk_result {
+                            let chunk_str = String::from_utf8_lossy(chunk);
+                            let mut tracker = usage_tracker_clone.lock().unwrap();
+                            tracker.parse_sse_chunk(&chunk_str);
+                        }
+                    })
+                    .chain(futures::stream::once(async move {
+                        // 流结束时更新日志（填充 token、耗时和响应头）
+                        let duration_ms = start_time.elapsed().as_millis() as u64;
+                        let tracker = usage_tracker.lock().unwrap();
+                        let (input_tokens, output_tokens) = (tracker.input_tokens, tracker.output_tokens);
+                        logs_clone.update_request_log(
+                            log_id_clone,
+                            Some(status),
+                            input_tokens,
+                            output_tokens,
+                            Some(duration_ms),
+                            Some(response_headers_clone),
+                        );
+                        // 返回空 bytes 作为流的结束标记
+                        Ok(bytes::Bytes::new())
+                    }));
+
+                let body = Body::from_stream(tracked_stream);
                 return builder.body(body).unwrap_or_else(|_| {
                     error_response(
                         StatusCode::INTERNAL_SERVER_ERROR,
@@ -398,6 +536,16 @@ fn smart_url_join(base: &str, path: &str) -> String {
 
     // 默认直接拼接
     format!("{}{}", base_trimmed, path)
+}
+
+/// 检测响应是否是流式（SSE）
+#[allow(dead_code)]
+fn is_streaming_response(resp: &reqwest::Response) -> bool {
+    resp.headers()
+        .get("content-type")
+        .and_then(|v| v.to_str().ok())
+        .map(|ct| ct.contains("text/event-stream"))
+        .unwrap_or(false)
 }
 
 /// 将请求体 JSON 中的 "model" 字段替换为队列指定的 model_id

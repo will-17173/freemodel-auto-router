@@ -25,11 +25,12 @@ function AppToggle({ id: _id, label, enabled, disabled, onToggle, iconUrl }: App
   return (
     <div className={cn(
       "flex items-center gap-1.5",
-      disabled && "opacity-50"
+      disabled && "opacity-40 cursor-not-allowed"
     )}>
       <div className={cn(
         "w-8 h-8 rounded-md flex items-center justify-center overflow-hidden",
-        !enabled && "bg-muted"
+        !enabled && "bg-muted",
+        disabled && "grayscale"
       )}>
         {iconUrl ? (
           <img src={iconUrl} alt={label} className="h-6 w-6 object-contain" />
@@ -62,7 +63,9 @@ interface TopBarProps {
 }
 
 export function TopBar({ port, isActive, appStates, onAppToggle, appInstallations }: TopBarProps) {
-  const codexInstalled = appInstallations?.codex.installed ?? false
+  const ccInstalled = appInstallations?.cc.installed ?? false
+  const hermesInstalled = appInstallations?.hermes.installed ?? false
+  const openclawInstalled = appInstallations?.openclaw.installed ?? false
 
   return (
     <div className="h-12 px-5 bg-card/95 border-b border-border shadow-sm flex items-center justify-between shrink-0">
@@ -86,7 +89,23 @@ export function TopBar({ port, isActive, appStates, onAppToggle, appInstallation
       {/* App toggles */}
       <TooltipProvider>
         <div className="flex items-center gap-3">
-          <AppToggle id="cc" label="Claude Code" iconUrl={claudecodeImg} enabled={appStates.cc} disabled={!isActive} onToggle={(e) => onAppToggle("cc", e)} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="cursor-default">
+                <AppToggle
+                  id="cc"
+                  label="Claude Code"
+                  iconUrl={claudecodeImg}
+                  enabled={appStates.cc}
+                  disabled={!isActive || !ccInstalled}
+                  onToggle={(e) => onAppToggle("cc", e)}
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>{ccInstalled ? "Claude Code" : "未安装"}</p>
+            </TooltipContent>
+          </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
               <span className="cursor-default">
@@ -95,7 +114,7 @@ export function TopBar({ port, isActive, appStates, onAppToggle, appInstallation
                   label="Codex"
                   iconUrl={codexImg}
                   enabled={appStates.codex}
-                  disabled={!isActive || !codexInstalled}
+                  disabled={true} // 开发中，永久禁用
                   onToggle={(e) => onAppToggle("codex", e)}
                 />
               </span>
@@ -104,8 +123,40 @@ export function TopBar({ port, isActive, appStates, onAppToggle, appInstallation
               <p>开发中</p>
             </TooltipContent>
           </Tooltip>
-          <AppToggle id="hermes" label="H" iconUrl={hermesImg} enabled={appStates.hermes} disabled={!isActive} onToggle={(e) => onAppToggle("hermes", e)} />
-          <AppToggle id="openclaw" label="OC" iconUrl={openclawImg} enabled={appStates.openclaw} disabled={!isActive} onToggle={(e) => onAppToggle("openclaw", e)} />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="cursor-default">
+                <AppToggle
+                  id="hermes"
+                  label="H"
+                  iconUrl={hermesImg}
+                  enabled={appStates.hermes}
+                  disabled={!isActive || !hermesInstalled}
+                  onToggle={(e) => onAppToggle("hermes", e)}
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>{hermesInstalled ? "Hermes" : "未安装"}</p>
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="cursor-default">
+                <AppToggle
+                  id="openclaw"
+                  label="OC"
+                  iconUrl={openclawImg}
+                  enabled={appStates.openclaw}
+                  disabled={!isActive || !openclawInstalled}
+                  onToggle={(e) => onAppToggle("openclaw", e)}
+                />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              <p>{openclawInstalled ? "OpenClaw" : "未安装"}</p>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </TooltipProvider>
     </div>
