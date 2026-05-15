@@ -32,6 +32,9 @@ pub struct ProviderSwitchedPayload {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // 迁移旧配置文件到 ~/.config/freemodel/
+    migrate_config_files();
+
     // 检查是否需要迁移（providers.json 不存在时）
     if providers::needs_migration() {
         let legacy_providers = providers::read_legacy_providers();
@@ -1048,6 +1051,58 @@ async fn test_provider_connection(
                     message: format!("连接失败: {}", e),
                     latency_ms: None,
                 }),
+            }
+        }
+    }
+}
+
+/// 迁移旧配置文件（应用目录或 ~/Library/Application Support）到 ~/.config/freemodel/
+fn migrate_config_files() {
+    use std::fs;
+    use std::path::PathBuf;
+
+    // 新配置目录
+    let new_dir = config::config_dir();
+
+    // 确保新目录存在
+    if !new_dir.exists() {
+        if let Err(e) = fs::create_dir_all(&new_dir) {
+            log::error!("[migrate] cannot create config dir: {e}");
+            return;
+        }
+    }
+
+    // 需要迁移的文件
+    let files = ["config.json", "providers.json", "custom_providers.json", "auth.json"];
+
+    // 来源 1: 应用根目录（开发时的旧位置）
+    let app_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .map(PathBuf::from)
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    // 来源 2: ~/Library/Application Support/freemodel（dirs::config_dir 的旧位置）
+    let legacy_config_dir = dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join("freemodel");
+
+    let sources = [
+        ("app_dir", app_dir),
+        ("legacy_config", legacy_config_dir),
+    ];
+
+    for (src_name, src_dir) in &sources {
+        for file in &files {
+            let src_path = src_dir.join(file);
+            let dst_path = new_dir.join(file);
+
+            // 如果源文件存在且目标不存在，则迁移
+            if src_path.exists() && !dst_path.exists() {
+                if let Err(e) = fs::copy(&src_path, &dst_path) {
+                    log::error!("[migrate] failed to copy {} from {}: {e}", file, src_name);
+                } else {
+                    log::info!("[migrate] migrated {} from {} to {:?}", file, src_name, dst_path);
+                }
             }
         }
     }

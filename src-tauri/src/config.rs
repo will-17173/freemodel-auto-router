@@ -3,6 +3,18 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+/// 获取应用配置目录 (~/.config/freemodel/)
+pub fn config_dir() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".config")
+        .join("freemodel")
+}
+
+fn config_path() -> PathBuf {
+    config_dir().join("config.json")
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Protocol {
     #[serde(rename = "OpenAI", alias = "openAI", alias = "openAi")]
@@ -186,14 +198,6 @@ impl Default for AppConfig {
             queue: vec![],
         }
     }
-}
-
-fn config_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("config.json")
 }
 
 pub fn load_config() -> AppConfig {

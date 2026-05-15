@@ -3,12 +3,10 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
+use crate::config::config_dir;
+
 fn auth_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("auth.json")
+    config_dir().join("auth.json")
 }
 
 pub fn load_auth() -> HashMap<String, String> {

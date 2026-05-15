@@ -5,8 +5,9 @@ use std::path::PathBuf;
 
 // Re-export Provider and Model for use by other modules that import from providers
 pub use crate::config::{Model, Provider};
+pub use crate::config::config_dir;
 
-/// 格式版本常量，决定请求哪个 URL
+// 格式版本常量，决定请求哪个 URL
 pub const CURRENT_FORMAT_VERSION: u32 = 1;
 
 /// 线上配置的基础 URL
@@ -44,22 +45,14 @@ pub struct CustomProvidersConfig {
     pub custom_models_in_builtin: std::collections::HashMap<String, Vec<Model>>,
 }
 
-/// 获取 providers.json 文件路径（与 config.json 同目录）
+/// 获取 providers.json 文件路径
 pub fn providers_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("providers.json")
+    config_dir().join("providers.json")
 }
 
 /// 获取 custom_providers.json 文件路径
 pub fn custom_providers_path() -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join("custom_providers.json")
+    config_dir().join("custom_providers.json")
 }
 
 /// 加载内置默认供应商（从 builtin_providers.json）
@@ -74,7 +67,10 @@ pub fn load_providers() -> ProvidersConfig {
     let path = providers_path();
     if let Ok(s) = fs::read_to_string(&path) {
         match serde_json::from_str::<ProvidersConfig>(&s) {
-            Ok(cfg) => cfg,
+            Ok(cfg) => {
+                log::info!("[providers] loaded {} providers from {:?}", cfg.providers.len(), path);
+                cfg
+            }
             Err(e) => {
                 log::error!("[providers] parse error: {e}, using builtin defaults");
                 ProvidersConfig {
@@ -85,7 +81,7 @@ pub fn load_providers() -> ProvidersConfig {
             }
         }
     } else {
-        log::info!("[providers] file not found, using builtin defaults");
+        log::info!("[providers] file not found at {:?}, using builtin defaults", path);
         ProvidersConfig {
             version: 0,
             format_version: CURRENT_FORMAT_VERSION,
@@ -318,6 +314,7 @@ pub fn needs_migration() -> bool {
 
 /// 从旧 config.json 读取 providers 字段（迁移用）
 pub(crate) fn read_legacy_providers() -> Vec<Provider> {
+    // 旧版 config.json 在应用目录
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .map(PathBuf::from)
