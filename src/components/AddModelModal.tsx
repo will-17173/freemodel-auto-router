@@ -60,13 +60,13 @@ export function AddModelModal({ providerName, existingModelIds, onSave, onClose 
             value={models}
             onChange={(e) => { setModels(e.target.value); setError("") }}
             onKeyDown={handleKeyDown}
-            placeholder={"claude-3-5-sonnet-latest\nclaude-3-5-haiku-latest"}
+            placeholder={"claude-sonnet-4-6"}
             rows={4}
             autoFocus
             className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y min-h-[104px] font-mono"
           />
           <p className="text-xs text-muted-foreground">
-            一行一个模型，也支持用英文逗号分隔。
+            一行一个模型，填写模型 ID
           </p>
         </div>
 

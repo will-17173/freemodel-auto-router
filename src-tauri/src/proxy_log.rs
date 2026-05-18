@@ -219,78 +219,7 @@ impl ProxyLogStore {
         }
     }
 
-    pub fn push_detailed<K, V, I>(
-        &self,
-        level: LogLevel,
-        message: impl Into<String>,
-        fields: I,
-        provider: Option<String>,
-        model: Option<String>,
-        status: Option<u16>,
-        input_tokens: Option<u64>,
-        output_tokens: Option<u64>,
-        duration_ms: Option<u64>,
-        request_headers: Option<BTreeMap<String, String>>,
-    ) where
-        K: Into<String>,
-        V: Into<String>,
-        I: IntoIterator<Item = (K, V)>,
-    {
-        let message_str = message.into();
-        // 过滤掉 inbound request、forwarding upstream 和 retrying current provider 日志
-        if message_str == "inbound request"
-            || message_str == "forwarding upstream"
-            || message_str == "retrying current provider"
-        {
-            return;
-        }
-
-        let mut inner = self.inner.lock().unwrap();
-        if inner.capacity == 0 {
-            return;
-        }
-        while inner.entries.len() >= inner.capacity {
-            inner.entries.pop_front();
-        }
-
-        // 对请求头进行敏感字段过滤
-        let sanitized_headers = request_headers.map(|h| {
-            h.into_iter()
-                .map(|(key, value)| {
-                    let sanitized_value = sanitize_field(&key, value);
-                    (key, sanitized_value)
-                })
-                .collect()
-        });
-
-        let entry = ProxyLogEntry {
-            id: inner.next_id,
-            request_id: None,
-            timestamp_ms: current_timestamp_ms(),
-            level,
-            message: message_str,
-            fields: fields
-                .into_iter()
-                .map(|(key, value)| {
-                    let key = key.into();
-                    let value = sanitize_field(&key, value.into());
-                    (key, value)
-                })
-                .collect(),
-            provider,
-            model,
-            status,
-            input_tokens,
-            output_tokens,
-            duration_ms,
-            request_headers: sanitized_headers,
-            response_headers: None,
-            is_final: true,
-        };
-        inner.next_id += 1;
-        inner.entries.push_back(entry);
-    }
-
+    
     pub fn recent(&self) -> Vec<ProxyLogEntry> {
         self.inner.lock().unwrap().entries.iter().cloned().collect()
     }

@@ -18,8 +18,10 @@ import { SettingsPage } from "./components/SettingsPage";
 import { ApiKeyModal } from "./components/ApiKeyModal";
 import { AddProviderModal, type AddProviderPayload } from "./components/AddProviderModal";
 import { AddModelModal } from "./components/AddModelModal";
+import { OnboardingModal } from "./components/OnboardingModal";
 import { ToastProvider, useToast } from "./components/ui/toast";
 import { dedupeQueueItems } from "./lib/queue";
+import { ONBOARDING_SEEN_VALUE, shouldShowOnboarding } from "./lib/onboarding";
 import { trackEvent } from "./lib/analytics";
 import type { AppConfig, Provider, QueueStateInfo, ProviderSwitchedPayload, DraftItem, AppInstallations } from "./types";
 import "./App.css";
@@ -48,6 +50,7 @@ function createProviderId(name: string, providers: Provider[]) {
 }
 
 function AppContent() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [providers, setProviders] = useState<Provider[]>([]);  // 独立 providers 状态
   const [authMap, setAuthMap] = useState<Record<string, boolean>>({});  // provider_id -> hasKey
@@ -83,7 +86,13 @@ function AppContent() {
     getProviders().then(setProviders);
     getAllAuth().then(setAuthMap);
     detectAppInstallations().then(setAppInstallations).catch(console.error);
+    setShowOnboarding(shouldShowOnboarding(localStorage.getItem("freemodel:onboarding")));
   }, []);
+
+  function closeOnboarding() {
+    localStorage.setItem("freemodel:onboarding", ONBOARDING_SEEN_VALUE);
+    setShowOnboarding(false);
+  }
 
   useEffect(() => {
     if (config) isInjected(config.port).then((v) => setAppStates(prev => ({ ...prev, cc: v }))).catch(console.error);
@@ -399,6 +408,7 @@ function AppContent() {
       })),
       priority: Math.max(0, ...providers.map((provider) => provider.priority)) + 1,
       is_custom: true,
+      link: input.link || undefined,
     };
 
     await saveCustomProvider(nextProvider);
@@ -416,7 +426,7 @@ function AppContent() {
   function handleDeleteProvider(providerId: string) {
     deleteCustomProvider(providerId).then(async () => {
       setProviders(await getProviders());
-      // 从所有队列中移除该供应商的项目
+      // 从所有队列中移除该服务商的项目
       setConfig((prev) => {
         if (!prev) return prev;
         const updatedQueues = { ...prev.queues };
@@ -494,90 +504,92 @@ function AppContent() {
 
   return (
     <div className="h-screen flex bg-background text-foreground">
-      {/* Sidebar */}
-      <Sidebar currentPage={currentPage} onPageChange={handlePageChange} />
+        {/* Sidebar */}
+        <Sidebar currentPage={currentPage} onPageChange={handlePageChange} />
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* TopBar */}
-        <TopBar
-          port={config.port}
-          isActive={isActive}
-          appStates={appStates}
-          appInstallations={appInstallations}
-          onAppToggle={handleAppToggle}
-        />
-
-        {/* Page content */}
-        {currentPage === "providers" && (
-          <ProvidersPage
-            providers={providers}
-            authMap={authMap}
-            onAddToQueue={addToEditPanel}
-            onConfigKey={(id) => setEditingKeyProviderId(id)}
-            onAddModel={(id) => setAddingModelProviderId(id)}
-            onAddProvider={() => setShowAddProvider(true)}
-            onDeleteProvider={handleDeleteProvider}
-            onDeleteModel={handleDeleteModel}
-            // 队列标签栏
-            queues={config.queues}
-            queueStates={queueStates}
-            defaultQueueId={config.default_queue_id}
-            selectedQueueId={editingQueueId}
-            onSelectQueue={openEditPanel}
-            onSetDefaultQueue={handleSetDefaultQueue}
-            onDeleteQueue={handleDeleteQueue}
-            onNewQueue={openNewPanel}
-            // 编辑面板
-            editPanelMode={editPanelMode}
-            editPanelName={editPanelName}
-            editPanelItems={editPanelItems}
-            onEditPanelNameChange={setEditPanelName}
-            onRemoveEditPanelItem={removeFromEditPanel}
-            onReorderEditPanelItems={reorderEditPanelItems}
-            onClearEditPanelItems={clearEditPanelItems}
-            onCloseEditPanel={closeEditPanel}
-            onCancelEditPanel={cancelEditPanel}
-            onSaveEditPanel={saveEditPanel}
-            onTrackEvent={trackEvent}
-          />
-        )}
-        {currentPage === "logs" && (
-          <LogsPage port={config.port} />
-        )}
-        {currentPage === "settings" && (
-          <SettingsPage
-            retry={config.retry}
+        {/* Main content */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* TopBar */}
+          <TopBar
             port={config.port}
-            onSave={(retry, newPort, portChanged) => {
-              const next = { ...config, retry, port: newPort };
-              updateAndSave(next);
-              trackEvent("settings_saved", {
-                port_changed: portChanged,
-                max_retries: retry.max_retries,
-                retry_delay_secs: retry.retry_delay_secs,
-              });
-              if (portChanged) {
-                restartProxy(newPort).then(async () => {
-                  if (appStates.cc) {
-                    const dq = next.queues[next.default_queue_id];
-                    const head = dq?.items[0];
-                    const p = head ? providers.find((pr) => pr.id === head.provider_id) : undefined;
-                    if (p) {
-                      const apiKey = await getAuth(p.id);
-                      if (apiKey && apiKey.trim().length > 0) {
-                        injectProxy(newPort, apiKey).catch(console.error);
+            isActive={isActive}
+            appStates={appStates}
+            appInstallations={appInstallations}
+            onAppToggle={handleAppToggle}
+          />
+
+          {/* Page content */}
+          {currentPage === "providers" && (
+            <ProvidersPage
+              providers={providers}
+              authMap={authMap}
+              onAddToQueue={addToEditPanel}
+              onConfigKey={(id) => setEditingKeyProviderId(id)}
+              onAddModel={(id) => setAddingModelProviderId(id)}
+              onAddProvider={() => setShowAddProvider(true)}
+              onDeleteProvider={handleDeleteProvider}
+              onDeleteModel={handleDeleteModel}
+              // 队列标签栏
+              queues={config.queues}
+              queueStates={queueStates}
+              defaultQueueId={config.default_queue_id}
+              selectedQueueId={editingQueueId}
+              onSelectQueue={openEditPanel}
+              onSetDefaultQueue={handleSetDefaultQueue}
+              onDeleteQueue={handleDeleteQueue}
+              onNewQueue={openNewPanel}
+              // 编辑面板
+              editPanelMode={editPanelMode}
+              editPanelName={editPanelName}
+              editPanelItems={editPanelItems}
+              onEditPanelNameChange={setEditPanelName}
+              onRemoveEditPanelItem={removeFromEditPanel}
+              onReorderEditPanelItems={reorderEditPanelItems}
+              onClearEditPanelItems={clearEditPanelItems}
+              onCloseEditPanel={closeEditPanel}
+              onCancelEditPanel={cancelEditPanel}
+              onSaveEditPanel={saveEditPanel}
+              onTrackEvent={trackEvent}
+            />
+          )}
+          {currentPage === "logs" && (
+            <LogsPage port={config.port} />
+          )}
+          {currentPage === "settings" && (
+            <SettingsPage
+              retry={config.retry}
+              port={config.port}
+              onSave={(retry, newPort, portChanged) => {
+                const next = { ...config, retry, port: newPort };
+                updateAndSave(next);
+                trackEvent("settings_saved", {
+                  port_changed: portChanged,
+                  max_retries: retry.max_retries,
+                  retry_delay_secs: retry.retry_delay_secs,
+                });
+                if (portChanged) {
+                  restartProxy(newPort).then(async () => {
+                    if (appStates.cc) {
+                      const dq = next.queues[next.default_queue_id];
+                      const head = dq?.items[0];
+                      const p = head ? providers.find((pr) => pr.id === head.provider_id) : undefined;
+                      if (p) {
+                        const apiKey = await getAuth(p.id);
+                        if (apiKey && apiKey.trim().length > 0) {
+                          injectProxy(newPort, apiKey).catch(console.error);
+                        }
                       }
                     }
-                  }
-                }).catch(console.error);
-              }
-            }}
-          />
-        )}
-      </div>
+                  }).catch(console.error);
+                }
+              }}
+            />
+          )}
+        </div>
 
       {/* Modals */}
+      <OnboardingModal open={showOnboarding} onClose={closeOnboarding} />
+
       {showAddProvider && (
         <AddProviderModal
           onSave={addProvider}

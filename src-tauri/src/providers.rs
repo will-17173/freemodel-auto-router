@@ -4,8 +4,8 @@ use std::fs;
 use std::path::PathBuf;
 
 // Re-export Provider and Model for use by other modules that import from providers
-pub use crate::config::{Model, Provider};
 pub use crate::config::config_dir;
+pub use crate::config::{Model, Provider};
 
 // 格式版本常量，决定请求哪个 URL
 pub const CURRENT_FORMAT_VERSION: u32 = 1;
@@ -55,8 +55,8 @@ pub fn custom_providers_path() -> PathBuf {
     config_dir().join("custom_providers.json")
 }
 
-/// 加载内置默认供应商（从 builtin_providers.json）
-fn load_builtin_providers() -> Vec<Provider> {
+/// 加载内置默认供应商配置（从 builtin_providers.json）
+fn load_builtin_providers_config() -> ProvidersConfig {
     const BUILTIN_PROVIDERS_JSON: &str = include_str!("../builtin_providers.json");
     serde_json::from_str(BUILTIN_PROVIDERS_JSON)
         .expect("builtin_providers.json should be valid JSON")
@@ -68,25 +68,24 @@ pub fn load_providers() -> ProvidersConfig {
     if let Ok(s) = fs::read_to_string(&path) {
         match serde_json::from_str::<ProvidersConfig>(&s) {
             Ok(cfg) => {
-                log::info!("[providers] loaded {} providers from {:?}", cfg.providers.len(), path);
+                log::info!(
+                    "[providers] loaded {} providers from {:?}",
+                    cfg.providers.len(),
+                    path
+                );
                 cfg
             }
             Err(e) => {
                 log::error!("[providers] parse error: {e}, using builtin defaults");
-                ProvidersConfig {
-                    version: 0,
-                    format_version: CURRENT_FORMAT_VERSION,
-                    providers: load_builtin_providers(),
-                }
+                load_builtin_providers_config()
             }
         }
     } else {
-        log::info!("[providers] file not found at {:?}, using builtin defaults", path);
-        ProvidersConfig {
-            version: 0,
-            format_version: CURRENT_FORMAT_VERSION,
-            providers: load_builtin_providers(),
-        }
+        log::info!(
+            "[providers] file not found at {:?}, using builtin defaults",
+            path
+        );
+        load_builtin_providers_config()
     }
 }
 
@@ -246,11 +245,7 @@ pub async fn sync_providers() -> (bool, bool) {
 pub fn migrate_legacy_config(old_providers: Vec<Provider>) -> Result<()> {
     if old_providers.is_empty() {
         log::info!("[migrate] no legacy providers, creating default providers.json");
-        let providers_config = ProvidersConfig {
-            version: 0,
-            format_version: CURRENT_FORMAT_VERSION,
-            providers: load_builtin_providers(),
-        };
+        let providers_config = load_builtin_providers_config();
         return save_providers(&providers_config);
     }
 
@@ -380,4 +375,55 @@ pub fn delete_custom_model_from_builtin(provider_id: &str, model_id: &str) -> Re
     }
 
     save_custom_providers(&config)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn builtin_providers_json_uses_providers_config_format() {
+        const BUILTIN_PROVIDERS_JSON: &str = include_str!("../builtin_providers.json");
+
+        let config: ProvidersConfig = serde_json::from_str(BUILTIN_PROVIDERS_JSON)
+            .expect("builtin_providers.json should match remote providers.json format");
+
+        assert_eq!(config.format_version, CURRENT_FORMAT_VERSION);
+        assert!(!config.providers.is_empty());
+    }
+
+    #[test]
+    fn builtin_providers_json_has_links_and_no_legacy_enabled_fields() {
+        const BUILTIN_PROVIDERS_JSON: &str = include_str!("../builtin_providers.json");
+
+        let json: serde_json::Value = serde_json::from_str(BUILTIN_PROVIDERS_JSON)
+            .expect("builtin_providers.json should be valid JSON");
+
+        let providers = json["providers"]
+            .as_array()
+            .expect("providers should be an array");
+
+        for provider in providers {
+            assert!(provider.get("enabled").is_none());
+            assert_eq!(
+                provider.get("is_custom").and_then(|v| v.as_bool()),
+                Some(false)
+            );
+            assert!(provider
+                .get("link")
+                .and_then(|v| v.as_str())
+                .is_some_and(|link| link.starts_with("https://")));
+
+            let models = provider["models"]
+                .as_array()
+                .expect("models should be an array");
+            for model in models {
+                assert!(model.get("enabled").is_none());
+                assert_eq!(
+                    model.get("is_custom").and_then(|v| v.as_bool()),
+                    Some(false)
+                );
+            }
+        }
+    }
 }

@@ -153,7 +153,7 @@ export function QueueEditPanel({
           </div>
           {items.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-8">
-              点击供应商模型的 + 添加
+              点击服务商模型的 + 添加
             </div>
           ) : (
             <DndContext

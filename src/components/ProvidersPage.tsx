@@ -1,29 +1,27 @@
 import React from "react"
-import { Plus, Trash2, Zap, Loader2, Check, X, ChevronDown, ChevronUp, Info } from "lucide-react"
+import { openUrl } from "@tauri-apps/plugin-opener"
+import { Plus, Trash2, Zap, Loader2, Check, X, ChevronDown, ChevronUp, Info, ExternalLink } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { QueueTabs } from "./QueueTabs"
 import { QueueEditPanel } from "./QueueEditPanel"
 import { ProviderInfoModal } from "./ProviderInfoModal"
 import { testProviderConnection, type TestConnectionResult } from "@/api"
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
 import { useToast } from "@/components/ui/toast"
 import type { Provider, DraftItem, Queue, QueueStateInfo } from "@/types"
 
 // 测试状态类型
 type TestStatus = "idle" | "testing" | "success" | "error"
 
-// 内置供应商 ID，这些不可删除
-const BUILTIN_PROVIDER_IDS = ["openrouter", "longcat"]
-
-// 判断供应商是否可删除
+// 判断服务商是否可删除
 function canDeleteProvider(provider: Provider): boolean {
-  if (provider.is_custom) return true
-  return !BUILTIN_PROVIDER_IDS.includes(provider.id)
+  return provider.is_custom === true
 }
 
-// 判断模型是否可删除（自定义供应商的模型都可删除，或者有 is_custom 标记的）
+// 判断模型是否可删除（自定义服务商的模型都可删除，或者有 is_custom 标记的）
 function canDeleteModel(provider: Provider, model: { id: string; is_custom?: boolean }): boolean {
   if (model.is_custom) return true
-  if (canDeleteProvider(provider)) return true  // 自定义供应商的所有模型都可删除
+  if (canDeleteProvider(provider)) return true  // 自定义服务商的所有模型都可删除
   return false
 }
 
@@ -107,6 +105,14 @@ export function ProvidersPage({
   const [showInfoModal, setShowInfoModal] = React.useState(false)
   const { showToast } = useToast()
 
+  async function openProviderLink(link: string) {
+    try {
+      await openUrl(link)
+    } catch {
+      showToast("error", "无法打开服务商网站")
+    }
+  }
+
   const toggleExpand = (providerId: string) => {
     setExpandedProviders(prev => ({
       ...prev,
@@ -153,7 +159,8 @@ export function ProvidersPage({
   }
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <TooltipProvider>
+      <div className="flex-1 flex flex-col overflow-hidden">
       {/* 队列标签栏 */}
       <QueueTabs
         queues={queues}
@@ -168,7 +175,7 @@ export function ProvidersPage({
 
       {/* 主内容区 */}
       <div className="flex-1 flex overflow-hidden">
-        {/* 供应商卡片网格 */}
+        {/* 服务商卡片网格 */}
         <div className={cn(
           "flex-1 p-6 overflow-auto bg-background transition-[margin-right] duration-300 ease-out",
           editPanelMode && "mr-[280px]"
@@ -176,7 +183,7 @@ export function ProvidersPage({
           {/* Header */}
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold">供应商</h1>
+              <h1 className="text-lg font-semibold">服务商</h1>
               <button
                 onClick={() => setShowInfoModal(true)}
                 className="p-1 text-muted-foreground hover:text-primary transition-colors"
@@ -189,7 +196,7 @@ export function ProvidersPage({
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
             >
               <Plus className="h-3.5 w-3.5" />
-              添加供应商
+              添加服务商
             </button>
           </div>
 
@@ -212,8 +219,21 @@ export function ProvidersPage({
                       <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
                     )}
                     <span className="font-semibold text-sm text-foreground">{provider.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
+                    {provider.link && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+                            onClick={() => openProviderLink(provider.link!)}
+                            title="打开服务商网站"
+                            aria-label="打开服务商网站"
+                          >
+                            <ExternalLink className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>打开服务商网站</TooltipContent>
+                      </Tooltip>
+                    )}
                     {/* 添加模型按钮 */}
                     <button
                       className="text-xs px-2 py-1 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
@@ -222,31 +242,39 @@ export function ProvidersPage({
                     >
                       + 模型
                     </button>
+                  </div>
+                  <div className="flex items-center gap-2">
                     {/* 测试连接按钮 */}
-                    <button
-                      onClick={() => handleTest(provider.id)}
-                      disabled={!authMap[provider.id] || testStates[provider.id]?.status === "testing"}
-                      title={!authMap[provider.id] ? "请先配置 API Key" : "测试连接"}
-                      className={cn(
-                        "flex items-center justify-center w-7 h-7 rounded-full border transition-colors",
-                        testStates[provider.id]?.status === "success"
-                          ? "border-[color:var(--fm-success)] bg-[var(--fm-success-subtle)] text-[color:var(--fm-success-text)]"
-                          : testStates[provider.id]?.status === "error"
-                            ? "border-destructive/50 bg-destructive/10 text-destructive"
-                            : "border-border bg-muted/50 text-muted-foreground hover:border-primary hover:text-primary",
-                        !authMap[provider.id] && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      {testStates[provider.id]?.status === "testing" ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : testStates[provider.id]?.status === "success" ? (
-                        <Check className="h-3.5 w-3.5" />
-                      ) : testStates[provider.id]?.status === "error" ? (
-                        <X className="h-3.5 w-3.5" />
-                      ) : (
-                        <Zap className="h-3.5 w-3.5" />
-                      )}
-                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={() => handleTest(provider.id)}
+                          disabled={!authMap[provider.id] || testStates[provider.id]?.status === "testing"}
+                          className={cn(
+                            "flex items-center justify-center w-7 h-7 rounded-full border transition-colors",
+                            testStates[provider.id]?.status === "success"
+                              ? "border-[color:var(--fm-success)] bg-[var(--fm-success-subtle)] text-[color:var(--fm-success-text)]"
+                              : testStates[provider.id]?.status === "error"
+                                ? "border-destructive/50 bg-destructive/10 text-destructive"
+                                : "border-border bg-muted/50 text-muted-foreground hover:border-primary hover:text-primary",
+                            !authMap[provider.id] && "opacity-50 cursor-not-allowed"
+                          )}
+                        >
+                          {testStates[provider.id]?.status === "testing" ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : testStates[provider.id]?.status === "success" ? (
+                            <Check className="h-3.5 w-3.5" />
+                          ) : testStates[provider.id]?.status === "error" ? (
+                            <X className="h-3.5 w-3.5" />
+                          ) : (
+                            <Zap className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        {!authMap[provider.id] ? "请先配置 API Key" : "测试"}
+                      </TooltipContent>
+                    </Tooltip>
                     {/* 延迟显示 */}
                     {testStates[provider.id]?.result?.latency_ms && (
                       <span className="text-xs font-mono text-muted-foreground">
@@ -254,16 +282,21 @@ export function ProvidersPage({
                       </span>
                     )}
                     {canDeleteProvider(provider) && (
-                      <button
-                        className="p-1 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          console.log("onDeleteProvider clicked:", provider.id);
-                          onDeleteProvider(provider.id);
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            className="flex items-center justify-center w-7 h-7 rounded-full border border-border bg-muted/50 text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              console.log("onDeleteProvider clicked:", provider.id);
+                              onDeleteProvider(provider.id);
+                            }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>删除服务商</TooltipContent>
+                      </Tooltip>
                     )}
                     <button
                       className={cn(
@@ -380,6 +413,7 @@ export function ProvidersPage({
         open={showInfoModal}
         onClose={() => setShowInfoModal(false)}
       />
-    </div>
+      </div>
+    </TooltipProvider>
   )
 }

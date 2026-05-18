@@ -86,22 +86,7 @@ impl RouterState {
         }
     }
 
-    pub fn from_config_with_auth(cfg: &AppConfig, auth: HashMap<String, String>) -> Self {
-        let queues: HashMap<String, QueueState> = cfg
-            .queues
-            .iter()
-            .map(|(id, queue)| (id.clone(), QueueState::from_items(queue.items.clone())))
-            .collect();
-        Self {
-            queues,
-            providers: vec![],
-            retry: cfg.retry.clone(),
-            auth_map: auth,
-            app_mapping: cfg.app_mapping.clone(),
-            default_queue_id: cfg.default_queue_id.clone(),
-        }
-    }
-
+    
     pub fn from_config_with_providers(
         cfg: &AppConfig,
         providers: Vec<Provider>,
@@ -135,18 +120,7 @@ impl RouterState {
         // auth_map stays unchanged
     }
 
-    pub fn replace_config_and_providers(&mut self, cfg: &AppConfig, providers: Vec<Provider>) {
-        self.queues = cfg
-            .queues
-            .iter()
-            .map(|(id, queue)| (id.clone(), QueueState::from_items(queue.items.clone())))
-            .collect();
-        self.providers = providers;
-        self.retry = cfg.retry.clone();
-        self.app_mapping = cfg.app_mapping.clone();
-        self.default_queue_id = cfg.default_queue_id.clone();
-    }
-
+    
     pub fn update_auth(&mut self, auth: HashMap<String, String>) {
         self.auth_map = auth;
     }
@@ -311,9 +285,6 @@ pub fn new_router(cfg: &AppConfig) -> SharedRouter {
     Arc::new(RwLock::new(RouterState::from_config(cfg)))
 }
 
-pub fn new_router_with_auth(cfg: &AppConfig, auth: HashMap<String, String>) -> SharedRouter {
-    Arc::new(RwLock::new(RouterState::from_config_with_auth(cfg, auth)))
-}
 
 pub fn new_router_with_providers(
     cfg: &AppConfig,

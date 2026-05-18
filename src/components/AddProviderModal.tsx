@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input"
 export interface AddProviderPayload {
   name: string
   apiKey: string
+  link: string
   anthropicUrl: string
   openaiUrl: string
   dualProtocol: boolean
@@ -32,6 +33,7 @@ function parseModelIds(value: string) {
 export function AddProviderModal({ onSave, onClose }: Props) {
   const [name, setName] = useState("")
   const [apiKey, setApiKey] = useState("")
+  const [link, setLink] = useState("")
   const [anthropicUrl, setAnthropicUrl] = useState("")
   const [openaiUrl, setOpenaiUrl] = useState("")
   const [dualProtocol, setDualProtocol] = useState(true)
@@ -44,10 +46,11 @@ export function AddProviderModal({ onSave, onClose }: Props) {
   function handleSave() {
     const nextName = name.trim()
     const nextApiKey = apiKey.trim()
+    const nextLink = link.trim()
     const nextAnthropicUrl = anthropicUrl.trim()
     const nextOpenaiUrl = effectiveOpenaiUrl.trim()
 
-    if (!nextName) { setError("请填写供应商名"); return }
+    if (!nextName) { setError("请填写服务商名"); return }
     if (!nextApiKey) { setError("请填写 API Key"); return }
     if (!nextAnthropicUrl) { setError("请填写 Anthropic URL"); return }
     if (!dualProtocol && !nextOpenaiUrl) { setError("请填写 OpenAI URL"); return }
@@ -56,6 +59,7 @@ export function AddProviderModal({ onSave, onClose }: Props) {
     onSave({
       name: nextName,
       apiKey: nextApiKey,
+      link: nextLink,
       anthropicUrl: nextAnthropicUrl.replace(/\/+$/, ""),
       openaiUrl: nextOpenaiUrl.replace(/\/+$/, ""),
       dualProtocol,
@@ -73,7 +77,7 @@ export function AddProviderModal({ onSave, onClose }: Props) {
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>添加供应商</DialogTitle>
+          <DialogTitle>添加服务商</DialogTitle>
           <DialogDescription>
             配置 Anthropic 和 OpenAI 双协议 URL，或勾选单一地址兼容模式。
           </DialogDescription>
@@ -81,7 +85,7 @@ export function AddProviderModal({ onSave, onClose }: Props) {
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <label className="text-sm font-medium">供应商名</label>
+            <label className="text-sm font-medium">服务商名</label>
             <Input
               value={name}
               onChange={(e) => { setName(e.target.value); setError("") }}
@@ -98,7 +102,18 @@ export function AddProviderModal({ onSave, onClose }: Props) {
               value={apiKey}
               onChange={(e) => { setApiKey(e.target.value); setError("") }}
               onKeyDown={handleKeyDown}
-              placeholder="sk-..."
+              placeholder=""
+              className="font-mono text-xs"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">服务商网站</label>
+            <Input
+              value={link}
+              onChange={(e) => { setLink(e.target.value); setError("") }}
+              onKeyDown={handleKeyDown}
+              placeholder="https://example.com"
               className="font-mono text-xs"
             />
           </div>
@@ -110,7 +125,7 @@ export function AddProviderModal({ onSave, onClose }: Props) {
               onChange={(e) => { setDualProtocol(e.target.checked); setError("") }}
               className="h-4 w-4"
             />
-            单一地址兼容模式
+            双协议兼容（使用同一地址同时支持 Anthropic 和 OpenAI 协议）
           </label>
 
           <div className="space-y-2">
@@ -143,12 +158,12 @@ export function AddProviderModal({ onSave, onClose }: Props) {
               value={models}
               onChange={(e) => { setModels(e.target.value); setError("") }}
               onKeyDown={handleKeyDown}
-              placeholder={"claude-3-5-sonnet-latest\nclaude-3-5-haiku-latest"}
+              placeholder={"claude-sonnet-4-6\nglm-5.1"}
               rows={4}
               className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y min-h-[104px] font-mono"
             />
             <p className="text-xs text-muted-foreground">
-              一行一个模型，也支持用英文逗号分隔。将按 Anthropic 协议转发请求。
+              一行一个模型，填写模型 ID
             </p>
           </div>
         </div>
