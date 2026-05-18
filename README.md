@@ -1,195 +1,150 @@
-# freemodel-auto-router
+# FreeModel Auto Router
 
-> 一个 Tauri 桌面应用，作为 Claude Code / Codex / Hermes / OpenClaw 的 AI 供应商路由代理 —— 在多个免费模型供应商之间自动切换，避免单个供应商触发限流后中断会话。
+FreeModel Auto Router 是一个 Tauri 桌面应用，会在本机启动 OpenAI / Anthropic 兼容代理，把 Claude Code、Hermes、OpenClaw 等客户端的请求转发到队列中的模型供应商。当前供应商不可用、限流或返回 5xx 时，应用会按队列自动重试和切换，减少手动改 Key、改 base URL、改模型名的频率。
 
-## 它解决的问题
+![alt text](./assets/readme/ScreenShot_2026-05-18_191114_425.png)
+## 主要功能
 
-不少免费 / 低价 AI 模型供应商都提供 OpenAI 或 Anthropic 兼容的 API，但它们普遍存在：
-
-- 频繁返回 `429 Too Many Requests` 或 `503 Service Unavailable`
-- 单个 Key 配额有限，跑一会就要换
-- 不同供应商的 base_url、鉴权头、可用模型都不一样
-
-freemodel-auto-router 在本地启动一个 HTTP 代理（默认端口 `7860`），把客户端的请求代理到当前活跃的供应商，遇到 429 / 503 自动切换到队列中的下一个，全程无需手动干预。
-
-## 支持的客户端
-
-| 客户端 | 配置注入方式 | 端点 |
-|---|---|---|
-| **Claude Code** | `~/.claude/settings.json` 环境变量注入 | `/anthropic` |
-| **Codex** | `~/.codex/auth.json` + `config.toml` | `/openai` |
-| **Hermes** | `~/.hermes/config.yaml` 自定义供应商配置 | `/openai` |
-| **OpenClaw** | `~/.openclaw/openclaw.json` providers 配置 | `/openai` |
-
-应用启动时可选注入各客户端配置，退出时自动清理恢复原始配置。
-
-## 工作原理
-
-```
-Claude Code / Codex / Hermes / OpenClaw
-           ↓ http://localhost:{port}/anthropic 或 /openai
-      axum proxy (proxy.rs)
-           ↓
-      RouterState (RwLock)
-      读取 queues[default_queue_id].items[active_idx]
-           ↓
-      转发到 Provider 的 anthropic_url 或 openai_url
-      自动注入 API Key，重写 model 字段
-           ↓
-      429/503 → record_failure() → 切换下一队列项
-      → watch channel → Tauri emit "provider-switched"
-```
-
-- **多队列系统**：支持创建多个队列，通过 `default_queue_id` 指定活跃队列
-- **队列首项即活跃路由**：`queues[default_queue_id].items[active_idx]` 是当前正在使用的 `(provider_id, model_id)`
-- **双协议端点**：`/anthropic` 端点转发到 `anthropic_url`，`/openai` 端点转发到 `openai_url`
-- **协议自动适配**：`OpenAI` 协议用 `Authorization: Bearer <key>`；`Anthropic` 协议用 `x-api-key` + `anthropic-version: 2023-06-01`
-- **model 字段重写**：客户端传什么 model 名都不重要，代理会改写为队列项指定的 `model_id`
-
-## 功能特性
-
-- 黑白编辑风的供应商卡片网格 UI（Figma 风格设计系统，见 `DESIGN.md`）
-- **多队列管理**：创建/编辑/删除队列，通过标签栏快速切换
-- `@dnd-kit` 拖拽排序路由队列项
-- OpenAI / Anthropic 双协议支持，供应商可配置独立的 `anthropic_url` 和 `openai_url`
-- 重试次数、重试间隔可配置
-- 可配置代理端口（默认 7860），修改后重启生效
-- 实时代理日志面板，自动过滤敏感字段（`authorization` / `api-key` / `token` → `[redacted]`）
-- 添加自定义供应商 / 添加模型 Modal
-- 关闭窗口时收起到系统托盘，进程退出时自动清理客户端配置
-- 供应商切换时弹出系统通知（`tauri-plugin-notification`）
-- **应用映射规则**：按 User-Agent / Header / Path 自动路由到指定队列
-
-## 安装与运行
-
-### 环境要求
-
-- Node.js 18+ 和 pnpm
-- Rust 工具链（Tauri 2 要求）
-- macOS / Windows / Linux
-
-### 开发
-
-```bash
-# 安装依赖
-pnpm install
-
-# 启动 Tauri 开发环境（前端 + Rust 后端）
-pnpm tauri dev
-
-# 仅启动前端 Vite（不带 Tauri 桌面壳）
-pnpm dev
-
-# TypeScript 类型检查
-pnpm tsc --noEmit
-```
-
-### 构建
-
-```bash
-# 构建生产版本（生成桌面安装包）
-pnpm tauri build
-
-# 仅构建前端
-pnpm build
-```
+- 多供应商路由：内置 OpenRouter、ModelScope、LongCat、SiliconFlow、SenseNova、Vercel AI Gateway 等供应商，并支持添加自定义供应商。
+- 多队列管理：可以创建多个模型队列，拖拽调整优先级，设置默认队列。
+- 自动重试和切换：遇到 `429`、`500`、`502`、`503`、`504` 或上游请求错误时，先按配置重试，超过次数后切到队列里的下一个模型。
+- OpenAI / Anthropic 双协议：供应商可分别配置 `openai_url` 和 `anthropic_url`，代理会根据访问前缀选择上游端点。
+- 模型名自动改写：客户端传入的 `model` 会被替换为当前队列项指定的模型 ID。
+- API Key 独立管理：Key 存在本机 `auth.json`，和可同步的路由配置分离。
+- 客户端配置注入：支持在应用顶部开关中为 Claude Code、Hermes、OpenClaw 写入代理配置；Codex 注入后端已实现，当前 UI 暂时标记为开发中。
+- 安装检测：自动检测 Claude Code、Hermes、OpenClaw 是否已安装，未安装时禁用对应开关。
+- 代理日志：展示请求状态、供应商、模型、输入/输出 token、耗时、请求头和响应头，并自动脱敏敏感字段。
+- 连接测试：可对已配置 Key 的供应商发起测试请求，查看连通性和延迟。
+- 供应商配置同步：启动后会从线上地址检查预设供应商配置更新；本地自定义供应商和自定义模型单独保存。
+- 版本检查：设置页可检查 GitHub Release 是否有新版本。
+- 系统托盘：关闭窗口时隐藏到托盘，点击托盘图标可恢复窗口。
 
 ## 使用流程
 
-1. 启动应用，在顶部状态栏点击对应客户端开关注入配置
-2. 在供应商页面添加供应商：填写名称、`anthropic_url` / `openai_url`、协议、API Key、可用模型列表
-3. 创建队列，把要使用的 `(供应商, 模型)` 拖入队列，队列顶部即当前活跃项
-4. 正常使用客户端 —— 请求会被透明转发到队列首项；触发 429 / 503 后自动切换到下一项
+1. 启动应用。
+2. 在「服务商」页为供应商填写 API Key，或添加自定义供应商和模型。
+3. 新建或编辑队列，把要使用的模型加入队列并拖拽排序。
+4. 将需要日常使用的队列设为默认队列。
+5. 在右上角打开目标客户端开关，例如 Claude Code、Hermes 或 OpenClaw。
+6. 正常使用客户端。请求会进入本机代理，并按当前队列转发到上游供应商。
+
+队列里的当前可用项由后端维护。某个模型连续失败超过 `max_retries` 后会被标记为耗尽，代理会切换到同一队列里的下一个可用项；所有项都耗尽后返回错误。编辑队列会重置该队列的运行状态。
+
+## 支持的客户端
+
+| 客户端 | 当前状态 | 注入方式 | 代理前缀 |
+| --- | --- | --- | --- |
+| Claude Code | 可用 | 修改 `~/.claude/settings.json` 中的环境变量，并保留备份 | `/anthropic` |
+| Hermes | 可用 | 修改 `~/.hermes/config.yaml` 的模型和 `custom_providers` 配置 | `/openai` |
+| OpenClaw | 可用 | 修改 `~/.openclaw/openclaw.json` 的 providers 配置 | `/openai` |
+| Codex | 后端已实现，UI 暂禁用 | 修改 `~/.codex/auth.json` 和 `config.toml` | `/openai` |
+
+Claude Code 关闭注入时会恢复备份配置。应用正常退出时也会尝试清理 Claude Code 代理配置。
 
 ## 配置文件
 
-配置存储在 `~/.config/freemodel/config.json`：
+运行时配置目录固定为：
 
-```json
-{
-  "retry": {
-    "max_retries": 2,
-    "retry_delay_secs": 3
-  },
-  "queues": {
-    "default": {
-      "id": "default",
-      "name": "默认队列",
-      "items": [
-        { "provider_id": "openrouter", "model_id": "anthropic/claude-3.5-sonnet" }
-      ]
-    }
-  },
-  "default_queue_id": "default",
-  "app_mapping": [],
-  "port": 7860
-}
+```text
+~/.config/freemodel/
 ```
 
-API Key 存储在 `~/.config/freemodel/auth.json`（provider_id → API Key 映射），与配置分离便于多设备同步。
+主要文件：
 
-前端任何变更都会即时调用 `save_config_cmd` 持久化（乐观更新，无"保存"按钮）。
+| 文件 | 说明 |
+| --- | --- |
+| `config.json` | 端口、重试配置、队列、默认队列、应用映射 |
+| `auth.json` | `provider_id -> API Key`，只保存在本机 |
+| `providers.json` | 预设供应商列表，可由线上配置同步更新 |
+| `custom_providers.json` | 用户自定义供应商，以及给预设供应商追加的自定义模型 |
+
+## 开发
+
+环境要求：
+
+- Node.js 18+
+- pnpm
+- Rust 工具链
+- Tauri 2 支持的桌面平台，macOS / Windows / Linux
+
+常用命令：
+
+```bash
+pnpm install
+pnpm tauri dev
+```
+
+只启动前端：
+
+```bash
+pnpm dev
+```
+
+构建：
+
+```bash
+pnpm build
+pnpm tauri build
+```
+
+测试和类型检查：
+
+```bash
+pnpm build
+cargo test --manifest-path src-tauri/Cargo.toml
+```
 
 ## 技术栈
 
-| 层 | 选型 |
-|---|---|
-| 桌面壳 | Tauri 2 |
-| 前端 | React 19 + TypeScript + Tailwind v4 + Vite 7 |
-| 拖拽 | `@dnd-kit/core` + `@dnd-kit/sortable` |
-| UI 组件 | Radix UI + shadcn/ui 风格 |
-| 后端 HTTP | axum 0.7 + hyper 1 + reqwest 0.12 (rustls) |
+| 层 | 技术 |
+| --- | --- |
+| 桌面应用 | Tauri 2 |
+| 前端 | React 19、TypeScript、Vite 7、Tailwind CSS 4 |
+| UI | Radix UI、shadcn 风格组件、lucide-react |
+| 拖拽排序 | `@dnd-kit/core`、`@dnd-kit/sortable` |
+| 后端 HTTP | axum 0.7、reqwest 0.12、hyper 1 |
 | 异步运行时 | tokio |
-| 通知 | tauri-plugin-notification |
+| 通知和打开链接 | `tauri-plugin-notification`、`tauri-plugin-opener` |
 
 ## 项目结构
 
-### 后端（`src-tauri/src/`）
+```text
+src/
+  App.tsx                    前端状态容器和页面编排
+  api.ts                     Tauri invoke API 封装
+  types.ts                   前端类型定义
+  components/
+    ProvidersPage.tsx        服务商、模型和队列管理
+    QueueTabs.tsx            队列标签栏
+    QueueEditPanel.tsx       队列编辑面板
+    LogsPage.tsx             代理日志
+    SettingsPage.tsx         端口、重试、版本检查
+    TopBar.tsx               代理状态和客户端注入开关
+    OnboardingModal.tsx      首次使用说明
+  lib/
+    queue.ts                 队列去重等工具
+    onboarding.ts            首次引导状态
+    analytics.ts             前端事件记录入口
 
-| 文件 | 职责 |
-|---|---|
-| `lib.rs` | Tauri 入口；注册 commands；启动 proxy；系统托盘 |
-| `config.rs` | `AppConfig` / `Provider` / `Queue` / `QueueItem` / `AppMapping` 结构体；多队列支持；读写 `config.json` |
-| `router.rs` | `RouterState` — 维护每个队列的 `active_idx` 和 `exhausted_indices`；`record_failure()` 切换逻辑 |
-| `proxy.rs` | axum HTTP 代理；`rewrite_model_field()` 替换请求体中的 `model` 字段；支持 `/anthropic` 和 `/openai` 端点 |
-| `proxy_log.rs` | `ProxyLogStore` — 环形缓冲日志（默认 200），自动过滤敏感字段 |
-| `claude_settings.rs` | 注入 `~/.claude/settings.json` 的 env 三键；备份恢复机制 |
-| `codex_settings.rs` | 注入 `~/.codex/auth.json` + `config.toml` |
-| `hermes_settings.rs` | 注入 `~/.hermes/config.yaml` 的 `model` 节点 + `custom_providers` |
-| `openclaw_settings.rs` | 注入 `~/.openclaw/openclaw.json` 的 `models.providers` |
-| `auth.rs` | 管理 `~/.config/freemodel/auth.json`（provider_id → API Key 映射） |
-| `app_detection.rs` | 基于 User-Agent / Header 检测客户端类型 |
-| `providers.rs` | 预置供应商列表（OpenRouter、Anthropic 等） |
+src-tauri/src/
+  lib.rs                     Tauri 入口、commands、托盘、代理生命周期
+  config.rs                  配置结构、读写和旧队列迁移
+  providers.rs               预设供应商、自定义供应商、线上同步和迁移
+  auth.rs                    API Key 读写
+  router.rs                  队列运行状态、失败计数和切换逻辑
+  proxy.rs                   axum 代理、协议适配、日志和 token usage 解析
+  proxy_log.rs               环形代理日志和脱敏
+  app_detection.rs           客户端安装检测
+  claude_settings.rs         Claude Code 配置注入
+  codex_settings.rs          Codex 配置注入
+  hermes_settings.rs         Hermes 配置注入
+  openclaw_settings.rs       OpenClaw 配置注入
+```
 
-### 前端（`src/`）
+## 注意事项
 
-| 文件/目录 | 职责 |
-|---|---|
-| `App.tsx` | 唯一状态容器；管理多页面路由、队列编辑状态、应用注入状态 |
-| `api.ts` | 封装所有 Tauri invoke 命令 |
-| `types.ts` | TypeScript 类型（与 Rust 结构体对应） |
-| `components/` | 多页面结构 |
-| `Sidebar.tsx` | 左侧导航（providers / logs / settings） |
-| `TopBar.tsx` | 顶部状态栏 + 应用注入开关（CC / Codex / Hermes / OpenClaw） |
-| `ProvidersPage.tsx` | 供应商卡片网格 + 队列标签栏 + QueueEditPanel |
-| `QueueTabs.tsx` | 队列标签栏组件 |
-| `QueueEditPanel.tsx` | 队列编辑面板（新建/编辑模式） |
-| `LogsPage.tsx` | 代理日志 |
-| `SettingsPage.tsx` | 重试/端口配置 |
-| `AddProviderModal.tsx` / `AddModelModal.tsx` / `ApiKeyModal.tsx` | 输入弹窗 |
-| `ui/` | 基础 UI 组件（button、dialog、scroll-area 等） |
-
-更详细的架构说明见 `CLAUDE.md`，UI 设计系统见 `DESIGN.md`。
-
-## 设计约束
-
-- **多队列系统**：`config.queues` 是 `HashMap<String, Queue>`；`default_queue_id` 指定活跃队列
-- **队列首项即活跃**：`queues[default_queue_id].items[active_idx]` 是当前路由
-- **双协议支持**：`Provider` 有 `anthropic_url` + `openai_url` + `dual_protocol` 字段
-- **四种应用注入**：Claude Code（env）、Codex（auth.json + config.toml）、Hermes（config.yaml）、OpenClaw（openclaw.json）
-- **配置即真相**：前端不维护额外的"草稿"状态，每次变更都即时落盘
-- **shadow-light**：UI 用色块而非阴影做层级；CTA 一律是 pill，按钮永远不出现直角
-
-## 许可
-
-私有项目，暂未开源协议。
+- 代理只监听 `127.0.0.1`，默认端口为 `7860`。
+- 修改端口后需要重启代理服务，设置页会调用后端重启代理。
+- 供应商是否支持某个协议取决于对应 URL 是否已配置；访问缺失 URL 的协议前缀会返回 `503`。
+- 日志会脱敏 `authorization`、`api-key`、`token` 等敏感字段，但仍不建议在公开场合贴完整日志。
+- 本项目当前是私有项目，暂未声明开源许可证。

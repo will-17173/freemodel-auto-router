@@ -300,27 +300,47 @@ function AppContent() {
 
   async function handleSetDefaultQueue(queueId: string) {
     if (queueId === config?.default_queue_id) return;
-    await setDefaultQueue(queueId);
-    setConfig((prev) => prev ? { ...prev, default_queue_id: queueId } : prev);
-    trackEvent("queue_default_changed");
+    try {
+      await setDefaultQueue(queueId);
+      setConfig((prev) => prev ? { ...prev, default_queue_id: queueId } : prev);
+      trackEvent("queue_default_changed");
+    } catch (e) {
+      showToast("error", "切换当前队列失败");
+      console.error(e);
+    }
   }
 
   async function handleDeleteQueue(queueId: string) {
     if (queueId === config?.default_queue_id) return;
     const queue = config!.queues[queueId];
-    if (!window.confirm(`确定删除队列 "${queue.name}"？`)) return;
+    if (!queue) return;
 
-    await deleteQueue(queueId);
-    setConfig((prev) => {
-      if (!prev) return prev;
-      const updatedQueues = { ...prev.queues };
-      delete updatedQueues[queueId];
-      return { ...prev, queues: updatedQueues };
-    });
-    if (editingQueueId === queueId) {
-      closeEditPanel();
+    try {
+      await deleteQueue(queueId);
+      setConfig((prev) => {
+        if (!prev) return prev;
+        const updatedQueues = { ...prev.queues };
+        delete updatedQueues[queueId];
+        return {
+          ...prev,
+          queues: updatedQueues,
+          app_mapping: prev.app_mapping.filter((mapping) => mapping.queue_id !== queueId),
+        };
+      });
+      setQueueStates((prev) => {
+        const next = { ...prev };
+        delete next[queueId];
+        return next;
+      });
+      if (editingQueueId === queueId) {
+        closeEditPanel();
+      }
+      trackEvent("queue_deleted");
+      showToast("success", `队列 "${queue.name}" 已删除`);
+    } catch (e) {
+      showToast("error", "删除队列失败");
+      console.error(e);
     }
-    trackEvent("queue_deleted");
   }
 
   async function saveApiKey(providerId: string, key: string) {

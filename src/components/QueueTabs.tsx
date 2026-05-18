@@ -83,7 +83,11 @@ export function QueueTabs({
                 {!isDefault && (
                   <div className="self-stretch flex items-center gap-0.5 px-1.5 border-l border-border/70 shrink-0">
                     <button
-                      onClick={() => onSetDefaultQueue(queue.id)}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onSetDefaultQueue(queue.id)
+                      }}
                       title="设为当前"
                       aria-label={`设为当前队列：${queue.name}`}
                       className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:bg-primary/10 hover:text-primary transition-colors"
@@ -91,7 +95,11 @@ export function QueueTabs({
                       <CheckCircle2 className="h-3.5 w-3.5" />
                     </button>
                     <button
-                      onClick={() => onDeleteQueue(queue.id)}
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onDeleteQueue(queue.id)
+                      }}
                       title="删除队列"
                       aria-label={`删除队列：${queue.name}`}
                       className="h-7 w-7 rounded-md flex items-center justify-center text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
@@ -106,6 +114,7 @@ export function QueueTabs({
         </div>
 
         <button
+          type="button"
           onClick={onNewQueue}
           className="h-9 shrink-0 flex items-center gap-1.5 px-3 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors shadow-sm"
         >
