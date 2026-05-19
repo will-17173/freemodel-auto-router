@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-05-19
+
+### Fixed
+
+- DMG 重命名和目标解析逻辑改进 - 修复构建脚本中的解析问题
+- macOS 应用和发布产物对齐 - 确保产物命名一致性
+
+### Changed
+
+- 文档更新 - 修复 macOS 应用路径说明、添加损坏应用修复指南、更新 README
+
 ## [0.1.1] - 2026-05-19
 
 ### Added
