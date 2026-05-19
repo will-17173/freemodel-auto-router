@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.1] - 2026-05-19
+
+### Added
+
+- 加密存储 API Key，自动迁移明文 auth.json - 使用 AES-GCM 加密算法保护敏感数据
+- 检查更新功能和 GitHub Actions CI - 自动化构建流程和版本检查
+- 代理日志追踪和应用检测改进 - 更完善的请求追踪能力
+- Provider metadata 和 onboarding 流程更新 - 改进新用户引导体验
+
+### Fixed
+
+- 队列删除行为修复 - 正确处理队列删除后的状态同步
+- 配置文件路径标准化为 ~/.config/freemodel/ - 统一配置文件存储位置
+
+### Changed
+
+- 队列 UI badges 和 draft items 改进 - 优化队列项显示和草稿管理
+- 文档和资源文件更新 - 同步 README 和清理过期文档
+
 ## [0.1.0] - 2026-05-15
 
 ### Added
