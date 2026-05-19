@@ -1079,7 +1079,12 @@ fn migrate_config_files() {
     }
 
     // 需要迁移的文件
-    let files = ["config.json", "providers.json", "custom_providers.json", "auth.json"];
+    let files = [
+        "config.json",
+        "providers.json",
+        "custom_providers.json",
+        "auth.json",
+    ];
 
     // 来源 1: 应用根目录（开发时的旧位置）
     let app_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -1092,10 +1097,7 @@ fn migrate_config_files() {
         .unwrap_or_else(|| PathBuf::from("."))
         .join("freemodel");
 
-    let sources = [
-        ("app_dir", app_dir),
-        ("legacy_config", legacy_config_dir),
-    ];
+    let sources = [("app_dir", app_dir), ("legacy_config", legacy_config_dir)];
 
     for (src_name, src_dir) in &sources {
         for file in &files {
@@ -1107,7 +1109,12 @@ fn migrate_config_files() {
                 if let Err(e) = fs::copy(&src_path, &dst_path) {
                     log::error!("[migrate] failed to copy {} from {}: {e}", file, src_name);
                 } else {
-                    log::info!("[migrate] migrated {} from {} to {:?}", file, src_name, dst_path);
+                    log::info!(
+                        "[migrate] migrated {} from {} to {:?}",
+                        file,
+                        src_name,
+                        dst_path
+                    );
                 }
             }
         }
@@ -1136,7 +1143,10 @@ async fn check_update_cmd() -> Result<UpdateInfo, String> {
         .build()
         .map_err(|e| e.to_string())?;
 
-    let url = format!("https://api.github.com/repos/{}/releases/latest", GITHUB_REPO);
+    let url = format!(
+        "https://api.github.com/repos/{}/releases/latest",
+        GITHUB_REPO
+    );
 
     let response = client
         .get(&url)
@@ -1179,14 +1189,8 @@ async fn check_update_cmd() -> Result<UpdateInfo, String> {
 
 /// 比较版本号，返回 true 表示 latest > current（有更新）
 fn compare_versions(latest: &str, current: &str) -> bool {
-    let latest_parts: Vec<u32> = latest
-        .split('.')
-        .filter_map(|s| s.parse().ok())
-        .collect();
-    let current_parts: Vec<u32> = current
-        .split('.')
-        .filter_map(|s| s.parse().ok())
-        .collect();
+    let latest_parts: Vec<u32> = latest.split('.').filter_map(|s| s.parse().ok()).collect();
+    let current_parts: Vec<u32> = current.split('.').filter_map(|s| s.parse().ok()).collect();
 
     // 补齐到 3 位
     let mut latest_vec = latest_parts;

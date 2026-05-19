@@ -9,8 +9,14 @@ use axum::routing::{any, get};
 use axum::{Json, Router};
 use futures::StreamExt;
 use http_body_util::BodyExt;
-use std::sync::Arc;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
+use std::time::{Duration, Instant};
 use tokio::sync::watch;
+
+const UPSTREAM_RESPONSE_TIMEOUT: Duration = Duration::from_secs(300);
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum RoutePrefix {
@@ -24,6 +30,44 @@ struct UsageTracker {
     input_tokens: Option<u64>,
     output_tokens: Option<u64>,
     buffer: String,
+}
+
+struct RequestLogFinalizer {
+    logs: ProxyLogStore,
+    log_id: u64,
+    status: u16,
+    start_time: Instant,
+    usage_tracker: Arc<std::sync::Mutex<UsageTracker>>,
+    response_headers: Option<std::collections::BTreeMap<String, String>>,
+    completed: Arc<AtomicBool>,
+}
+
+impl RequestLogFinalizer {
+    fn complete(&self, status: u16) {
+        self.update(status);
+        self.completed.store(true, Ordering::SeqCst);
+    }
+
+    fn update(&self, status: u16) {
+        let duration_ms = self.start_time.elapsed().as_millis() as u64;
+        let tracker = self.usage_tracker.lock().unwrap();
+        self.logs.update_request_log(
+            self.log_id,
+            Some(status),
+            tracker.input_tokens,
+            tracker.output_tokens,
+            Some(duration_ms),
+            self.response_headers.clone(),
+        );
+    }
+}
+
+impl Drop for RequestLogFinalizer {
+    fn drop(&mut self) {
+        if !self.completed.load(Ordering::SeqCst) {
+            self.update(self.status);
+        }
+    }
 }
 
 impl UsageTracker {
@@ -336,20 +380,49 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             Some(inbound_headers_map.clone()),
         );
 
-        let start_time = std::time::Instant::now();
-        match req_builder.send().await {
-            Ok(resp) => {
+        let start_time = Instant::now();
+        match tokio::time::timeout(UPSTREAM_RESPONSE_TIMEOUT, req_builder.send()).await {
+            Err(_) => {
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                state.logs.update_request_log(
+                    log_id,
+                    Some(StatusCode::GATEWAY_TIMEOUT.as_u16()),
+                    None,
+                    None,
+                    Some(duration_ms),
+                    None,
+                );
+                state.logs.push(
+                    LogLevel::Error,
+                    "upstream request timeout",
+                    [
+                        ("provider", provider_name.clone()),
+                        ("model", model_id.clone()),
+                        (
+                            "timeout_secs",
+                            UPSTREAM_RESPONSE_TIMEOUT.as_secs().to_string(),
+                        ),
+                    ],
+                );
+                return error_response(StatusCode::GATEWAY_TIMEOUT, "upstream request timeout");
+            }
+            Ok(Ok(resp)) => {
                 let status = resp.status().as_u16();
 
                 // 用于追踪 usage 的共享 tracker
                 let usage_tracker = Arc::new(std::sync::Mutex::new(UsageTracker::default()));
-                let logs_clone = state.logs.clone();
-                let log_id_clone = log_id;
 
                 if is_retryable_error(status) {
                     // 错误响应：更新已有的日志条目（无 token 统计和响应头）
                     let duration_ms = start_time.elapsed().as_millis() as u64;
-                    state.logs.update_request_log(log_id, Some(status), None, None, Some(duration_ms), None);
+                    state.logs.update_request_log(
+                        log_id,
+                        Some(status),
+                        None,
+                        None,
+                        Some(duration_ms),
+                        None,
+                    );
 
                     let failure_action = {
                         let mut r = state.router.write().await;
@@ -418,7 +491,16 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                 // 创建追踪 usage 的 stream，并在流结束时更新日志
                 let stream = resp.bytes_stream();
                 let usage_tracker_clone = usage_tracker.clone();
-                let response_headers_clone = response_headers_map.clone();
+                let log_finalizer = Arc::new(RequestLogFinalizer {
+                    logs: state.logs.clone(),
+                    log_id,
+                    status: 499,
+                    start_time,
+                    usage_tracker,
+                    response_headers: Some(response_headers_map.clone()),
+                    completed: Arc::new(AtomicBool::new(false)),
+                });
+                let log_finalizer_clone = log_finalizer.clone();
                 let tracked_stream = stream
                     .inspect(move |chunk_result: &Result<bytes::Bytes, reqwest::Error>| {
                         // 解析 SSE 事件提取 usage（支持跨 chunk 缓冲）
@@ -430,17 +512,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                     })
                     .chain(futures::stream::once(async move {
                         // 流结束时更新日志（填充 token、耗时和响应头）
-                        let duration_ms = start_time.elapsed().as_millis() as u64;
-                        let tracker = usage_tracker.lock().unwrap();
-                        let (input_tokens, output_tokens) = (tracker.input_tokens, tracker.output_tokens);
-                        logs_clone.update_request_log(
-                            log_id_clone,
-                            Some(status),
-                            input_tokens,
-                            output_tokens,
-                            Some(duration_ms),
-                            Some(response_headers_clone),
-                        );
+                        log_finalizer_clone.complete(status);
                         // 返回空 bytes 作为流的结束标记
                         Ok(bytes::Bytes::new())
                     }));
@@ -453,11 +525,29 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
                     )
                 });
             }
-            Err(e) => {
+            Ok(Err(e)) => {
+                let status = if e.is_timeout() {
+                    StatusCode::GATEWAY_TIMEOUT
+                } else {
+                    StatusCode::BAD_GATEWAY
+                };
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                state.logs.update_request_log(
+                    log_id,
+                    Some(status.as_u16()),
+                    None,
+                    None,
+                    Some(duration_ms),
+                    None,
+                );
                 log::warn!("proxy request error: {}", e);
                 state.logs.push(
                     LogLevel::Error,
-                    "upstream request error",
+                    if e.is_timeout() {
+                        "upstream request timeout"
+                    } else {
+                        "upstream request error"
+                    },
                     [
                         ("provider", provider_name.clone()),
                         ("model", model_id.clone()),

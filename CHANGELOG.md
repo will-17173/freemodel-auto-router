@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-05-19
+
+### Fixed
+
+- macOS 生产环境中 CLI 应用检测 - 改进 macOS 环境下的应用识别机制
+- 代理请求日志状态更新 - 修复客户端取消或上游超时时请求日志长期停留在“进行中”的问题，取消请求标记为 499，超时请求标记为 504
+
 ## [0.1.2] - 2026-05-19
 
 ### Fixed

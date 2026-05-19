@@ -86,7 +86,6 @@ impl RouterState {
         }
     }
 
-    
     pub fn from_config_with_providers(
         cfg: &AppConfig,
         providers: Vec<Provider>,
@@ -120,7 +119,6 @@ impl RouterState {
         // auth_map stays unchanged
     }
 
-    
     pub fn update_auth(&mut self, auth: HashMap<String, String>) {
         self.auth_map = auth;
     }
@@ -284,7 +282,6 @@ pub type SharedRouter = Arc<RwLock<RouterState>>;
 pub fn new_router(cfg: &AppConfig) -> SharedRouter {
     Arc::new(RwLock::new(RouterState::from_config(cfg)))
 }
-
 
 pub fn new_router_with_providers(
     cfg: &AppConfig,

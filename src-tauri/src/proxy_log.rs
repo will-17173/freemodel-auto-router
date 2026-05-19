@@ -14,7 +14,7 @@ pub enum LogLevel {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct ProxyLogEntry {
     pub id: u64,
-    pub request_id: Option<String>,  // 用于关联同一请求的开始和结束日志
+    pub request_id: Option<String>, // 用于关联同一请求的开始和结束日志
     pub timestamp_ms: u128,
     pub level: LogLevel,
     pub message: String,
@@ -26,8 +26,8 @@ pub struct ProxyLogEntry {
     pub output_tokens: Option<u64>,
     pub duration_ms: Option<u64>,
     pub request_headers: Option<BTreeMap<String, String>>,
-    pub response_headers: Option<BTreeMap<String, String>>,  // 新增响应头
-    pub is_final: bool,  // true 表示请求完成，false 表示请求进行中
+    pub response_headers: Option<BTreeMap<String, String>>, // 新增响应头
+    pub is_final: bool, // true 表示请求完成，false 表示请求进行中
 }
 
 #[derive(Clone)]
@@ -219,7 +219,6 @@ impl ProxyLogStore {
         }
     }
 
-    
     pub fn recent(&self) -> Vec<ProxyLogEntry> {
         self.inner.lock().unwrap().entries.iter().cloned().collect()
     }
@@ -267,7 +266,14 @@ mod tests {
         assert_eq!(before[0].id, log_id);
         assert!(!before[0].is_final);
 
-        store.update_request_log(log_id, Some(200), Some(35_488), Some(118), Some(4_700), None);
+        store.update_request_log(
+            log_id,
+            Some(200),
+            Some(35_488),
+            Some(118),
+            Some(4_700),
+            None,
+        );
 
         let after = store.recent();
         assert_eq!(after.len(), 1);
