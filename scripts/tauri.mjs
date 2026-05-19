@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, readFileSync, renameSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -40,15 +40,22 @@ function renameMacDmg() {
   const from = join(dmgDir, `Freemodel Auto Router_${version}_${arch}.dmg`);
   const to = join(dmgDir, `freemodel-auto-router_${version}_${arch}.dmg`);
 
-  if (existsSync(from)) {
-    renameSync(from, to);
-    console.log(`Renamed DMG: ${to}`);
+  if (!existsSync(from)) {
+    return;
   }
+
+  if (existsSync(to)) {
+    rmSync(to);
+  }
+
+  renameSync(from, to);
+  console.log(`Renamed DMG: ${to}`);
 }
 
 function getMacArtifactArch() {
+  const targetArg = args.find((arg) => arg.startsWith("--target="));
   const targetIndex = args.indexOf("--target");
-  const target = targetIndex === -1 ? "" : args[targetIndex + 1] ?? "";
+  const target = targetArg?.slice("--target=".length) ?? (targetIndex === -1 ? "" : args[targetIndex + 1] ?? "");
 
   if (target.includes("aarch64-apple-darwin")) {
     return "aarch64";
