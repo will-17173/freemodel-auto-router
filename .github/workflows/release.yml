@@ -125,6 +125,7 @@ jobs:
           releaseBody: 'See CHANGELOG.md for details.'
           releaseDraft: true
           prerelease: false
+          releaseAssetNamePattern: 'freemodel-auto-router_[version]_[arch][setup][ext]'
           args: ${{ matrix.args }}
 
   publish-release:

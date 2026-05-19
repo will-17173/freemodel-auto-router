@@ -68,7 +68,7 @@ export function Sidebar({ currentPage, onPageChange }: SidebarProps) {
   const [version, setVersion] = useState("")
 
   useEffect(() => {
-    getVersion().then(setVersion).catch(() => setVersion("0.1.0"))
+    getVersion().then(setVersion).catch(() => setVersion("0.1.1"))
   }, [])
 
   async function openFooterLink(url: string) {

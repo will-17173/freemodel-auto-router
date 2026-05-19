@@ -1,6 +1,6 @@
-# FreeModel Auto Router
+# Freemodel Auto Router
 
-FreeModel Auto Router 是一个 Tauri 桌面应用，会在本机启动 OpenAI / Anthropic 兼容代理，把 Claude Code、Hermes、OpenClaw 等客户端的请求转发到队列中的模型供应商。当前供应商不可用、限流或返回 5xx 时，应用会按队列自动重试和切换，减少手动改 Key、改 base URL、改模型名的频率。
+Freemodel Auto Router 是一个 Tauri 桌面应用，会在本机启动 OpenAI / Anthropic 兼容代理，把 Claude Code、Hermes、OpenClaw 等客户端的请求转发到队列中的模型供应商。当前供应商不可用、限流或返回 5xx 时，应用会按队列自动重试和切换，减少手动改 Key、改 base URL、改模型名的频率。
 
 ![主界面](./assets/readme/image.png)
 
@@ -42,10 +42,10 @@ FreeModel Auto Router 是一个 Tauri 桌面应用，会在本机启动 OpenAI /
 
 ## macOS 文件损坏提示
 
-如果 macOS 提示“FreeModel Auto Router 已损坏，无法打开”，通常是系统给下载的应用加了隔离属性。可以在终端执行：
+如果 macOS 提示“Freemodel Auto Router 已损坏，无法打开”，通常是系统给下载的应用加了隔离属性。可以在终端执行：
 
 ```bash
-sudo xattr -dr com.apple.quarantine "/Applications/freemodel-auto-router.app"
+sudo xattr -dr com.apple.quarantine "/Applications/Freemodel Auto Router.app"
 ```
 
 如果应用不在 `/Applications`，请把命令里的路径替换成实际的 `.app` 路径。执行后重新打开应用即可。

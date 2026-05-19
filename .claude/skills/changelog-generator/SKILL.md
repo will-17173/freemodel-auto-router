@@ -1,6 +1,6 @@
 ---
 name: changelog-generator
-description: 自动生成和更新 CHANGELOG.md，同时更新项目版本号。当用户提到 changelog、发布说明、release notes、版本更新、准备发布、tag 发布、版本变更时触发此技能。接受版本号参数，根据 git commit history 自动生成符合 Keep a Changelog 格式的变更日志，并更新 Cargo.toml 和 package.json 的版本号。
+description: 自动生成和更新 CHANGELOG.md，同时更新项目版本号。当用户提到 changelog、发布说明、release notes、版本更新、准备发布、tag 发布、版本变更时触发此技能。接受版本号参数，根据 git commit history 自动生成符合 Keep a Changelog 格式的变更日志，并更新 Cargo.toml、package.json 和 Tauri 配置中的版本号。
 ---
 
 # Changelog Generator
@@ -28,11 +28,13 @@ description: 自动生成和更新 CHANGELOG.md，同时更新项目版本号。
 **需要更新的文件**：
 - `src-tauri/Cargo.toml` 第 3 行：`version = "X.Y.Z"`
 - `package.json` 第 4 行：`"version": "X.Y.Z"`
+- `src-tauri/tauri.conf.json` 第 4 行：`"version": "X.Y.Z"`
 
 **更新方法**：
 1. 使用 Edit 工具修改 Cargo.toml 的 version 行
 2. 使用 Edit 工具修改 package.json 的 version 行
-3. 确保两个文件的版本号保持一致
+3. 使用 Edit 工具修改 tauri.conf.json 的 version 行
+4. 确保三个文件的版本号保持一致
 
 ### 2. 确定版本范围
 
@@ -114,6 +116,7 @@ git log --pretty=format:"%s" --no-merges
 2. **更新版本号文件**: 
    - 编辑 `src-tauri/Cargo.toml` 更新 version 字段
    - 编辑 `package.json` 更新 version 字段
+   - 编辑 `src-tauri/tauri.conf.json` 更新 version 字段
 
 3. **获取 commits**: 执行 git log 命令获取变更历史
 
@@ -132,15 +135,17 @@ git log --pretty=format:"%s" --no-merges
 **执行过程**：
 1. 更新 `src-tauri/Cargo.toml`: `version = "0.2.0"`
 2. 更新 `package.json`: `"version": "0.2.0"`
-3. 获取 v0.1.0 到 HEAD 的 commits
-4. 分类 commits 并生成 changelog
-5. 更新 CHANGELOG.md
+3. 更新 `src-tauri/tauri.conf.json`: `"version": "0.2.0"`
+4. 获取 v0.1.0 到 HEAD 的 commits
+5. 分类 commits 并生成 changelog
+6. 更新 CHANGELOG.md
 
 **输出摘要**：
 ```
 已更新版本号到 0.2.0:
 - src-tauri/Cargo.toml
 - package.json
+- src-tauri/tauri.conf.json
 
 CHANGELOG.md 已更新:
 ## [0.2.0] - 2024-01-20
@@ -153,7 +158,8 @@ CHANGELOG.md 已更新:
 
 ## 注意事项
 
-- 两个文件的版本号必须保持一致
+- 三个版本号文件必须保持一致：`src-tauri/Cargo.toml`、`package.json`、`src-tauri/tauri.conf.json`
+- Tauri Release 产物文件名使用 `src-tauri/tauri.conf.json` 的 `version`，不能漏改
 - Cargo.lock 会在编译时自动更新，无需手动修改
 - 忽略 merge commits（`--no-merges`）
 - Breaking changes 需特别标注

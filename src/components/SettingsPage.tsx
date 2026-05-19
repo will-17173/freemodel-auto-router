@@ -110,7 +110,7 @@ export function SettingsPage({ retry, port, onSave }: SettingsPageProps) {
           <div className="flex items-center gap-3">
             <span className="fm-caption">当前版本：</span>
             <span className="font-mono text-sm text-[var(--fm-text)]">
-              v{updateInfo?.current_version || "0.1.0"}
+              v{updateInfo?.current_version || "0.1.1"}
             </span>
           </div>
 
