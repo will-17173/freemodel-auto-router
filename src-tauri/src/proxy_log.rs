@@ -244,3 +244,38 @@ fn sanitize_field(key: &str, value: String) -> String {
         value
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_request_log_mutates_existing_entry_without_appending() {
+        let store = ProxyLogStore::new(10);
+
+        let log_id = store.create_request_log(
+            LogLevel::Info,
+            "request",
+            [("provider", "LongCat"), ("model", "LongCat-Flash-Chat")],
+            Some("LongCat".to_owned()),
+            Some("LongCat-Flash-Chat".to_owned()),
+            None,
+        );
+
+        let before = store.recent();
+        assert_eq!(before.len(), 1);
+        assert_eq!(before[0].id, log_id);
+        assert!(!before[0].is_final);
+
+        store.update_request_log(log_id, Some(200), Some(35_488), Some(118), Some(4_700), None);
+
+        let after = store.recent();
+        assert_eq!(after.len(), 1);
+        assert_eq!(after[0].id, log_id);
+        assert!(after[0].is_final);
+        assert_eq!(after[0].status, Some(200));
+        assert_eq!(after[0].input_tokens, Some(35_488));
+        assert_eq!(after[0].output_tokens, Some(118));
+        assert_eq!(after[0].duration_ms, Some(4_700));
+    }
+}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { Fragment, useEffect, useState } from "react"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -154,9 +154,8 @@ export function LogsPage({ port: _port }: LogsPageProps) {
               const hasResponseHeaders = log.response_headers && Object.keys(log.response_headers).length > 0
               const hasAnyHeaders = hasRequestHeaders || hasResponseHeaders
               return (
-                <>
+                <Fragment key={log.id}>
                   <TableRow
-                    key={log.id}
                     className={`${log.level === "error" ? "bg-destructive/5" : log.level === "warn" ? "bg-[var(--fm-warning-subtle)]" : ""} ${hasAnyHeaders ? "cursor-pointer hover:bg-muted/50" : ""}`}
                     onClick={hasAnyHeaders ? () => toggleExpand(log.id) : undefined}
                   >
@@ -212,7 +211,7 @@ export function LogsPage({ port: _port }: LogsPageProps) {
                       </TableCell>
                     </TableRow>
                   )}
-                </>
+                </Fragment>
               )
             })}
             {sortedLogs.length === 0 && (
