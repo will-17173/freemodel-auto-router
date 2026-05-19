@@ -40,6 +40,16 @@ FreeModel Auto Router 是一个 Tauri 桌面应用，会在本机启动 OpenAI /
 
 队列里的当前可用项由后端维护。某个模型连续失败超过 `max_retries` 后会被标记为耗尽，代理会切换到同一队列里的下一个可用项；所有项都耗尽后返回错误。编辑队列会重置该队列的运行状态。
 
+## macOS 文件损坏提示
+
+如果 macOS 提示“FreeModel Auto Router 已损坏，无法打开”，通常是系统给下载的应用加了隔离属性。可以在终端执行：
+
+```bash
+sudo xattr -dr com.apple.quarantine "/Applications/FreeModel Auto Router.app"
+```
+
+如果应用不在 `/Applications`，请把命令里的路径替换成实际的 `.app` 路径。执行后重新打开应用即可。
+
 ## 支持的客户端
 
 | 客户端      | 当前状态              | 注入方式                                                      | 代理前缀     |
