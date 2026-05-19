@@ -1,4 +1,5 @@
 import { CheckCircle2, Plus, Route, Trash2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import type { Queue, QueueStateInfo } from "@/types"
 
@@ -38,7 +39,7 @@ export function QueueTabs({
           </span>
           <div className="leading-none">
             <div className="text-sm font-semibold text-foreground">队列</div>
-            <div className="text-xs text-muted-foreground mt-1">{queueList.length} 个路由队列</div>
+            <div className="text-xs text-muted-foreground mt-1">{queueList.length} 个</div>
           </div>
         </div>
 
@@ -68,7 +69,17 @@ export function QueueTabs({
                   className="min-w-0 flex items-center gap-2 px-3 py-2 flex-1 text-left"
                 >
                   <span className="truncate">{queue.name}</span>
-                  <span className="text-xs text-muted-foreground shrink-0">{itemCount} 个模型</span>
+                  <Badge
+                    variant="secondary"
+                    className={cn(
+                      "h-5 min-w-5 shrink-0 justify-center rounded-full px-1.5 py-0 text-[11px] leading-none",
+                      isSelected
+                        ? "border-primary/30 bg-primary text-primary-foreground"
+                        : "border-primary/20 bg-primary/10 text-primary"
+                    )}
+                  >
+                    {itemCount}
+                  </Badge>
                   {isDefault && (
                     <span className="rounded-full bg-primary text-primary-foreground px-1.5 py-0.5 text-[11px] leading-none shrink-0">
                       当前

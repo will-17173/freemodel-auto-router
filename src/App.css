@@ -68,8 +68,8 @@
   --radius: 0.625rem;
 
   /* Legacy fm-* tokens — light theme */
-  --fm-font-sans: "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
-  --fm-font-mono: "ShareTechMono", "Helvetica Neue", system-ui, sans-serif;
+  --fm-font-sans: monospace, sans-serif;
+  --fm-font-mono: system-ui, sans-serif;
 
   /* Page layers */
   --fm-canvas:       #eef3f0;
@@ -490,6 +490,88 @@ body {
   background: var(--fm-primary-subtle);
   border-color: var(--fm-primary);
   color: var(--fm-primary-active);
+}
+
+/* ── Queue draft items ── */
+.fm-queue-draft-item {
+  display: grid;
+  grid-template-columns: 16px auto minmax(0, 1fr) 20px;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--fm-border);
+  border-radius: 8px;
+  background: var(--fm-surface);
+  box-shadow: 0 1px 2px rgba(16,24,20,0.05), 0 6px 16px rgba(16,24,20,0.06);
+}
+.fm-queue-draft-grip {
+  color: var(--fm-text-3);
+  cursor: grab;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 28px;
+}
+.fm-queue-draft-grip:active {
+  cursor: grabbing;
+}
+.fm-queue-draft-index {
+  color: var(--fm-text-1);
+  font-family: var(--fm-font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+}
+.fm-queue-draft-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
+}
+.fm-queue-draft-provider {
+  max-width: 100%;
+  padding: 3px 7px;
+  border: 1px solid var(--fm-primary-border);
+  border-radius: var(--fm-r-pill);
+  background: var(--fm-primary-ghost);
+  color: var(--fm-success-text);
+  font-family: var(--fm-font-sans);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.fm-queue-draft-model {
+  max-width: 100%;
+  color: var(--fm-text-1);
+  font-family: var(--fm-font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.fm-queue-draft-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fm-text-3);
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.fm-queue-draft-remove:hover {
+  background: var(--fm-error-subtle);
+  color: var(--fm-error-text);
 }
 
 /* ── Form input ── */

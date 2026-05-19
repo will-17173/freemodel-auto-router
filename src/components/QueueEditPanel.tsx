@@ -39,12 +39,14 @@ interface QueueEditPanelProps {
 function SortableDraftItem({
   uid,
   index,
-  label,
+  providerName,
+  modelName,
   onRemove,
 }: {
   uid: string
   index: number
-  label: string
+  providerName: string
+  modelName: string
   onRemove: (i: number) => void
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -58,17 +60,19 @@ function SortableDraftItem({
         transition,
         opacity: isDragging ? 0.5 : 1,
       }}
-      className="flex items-center gap-2 py-2 px-3 rounded-lg border border-border bg-card shadow-sm"
+      className="fm-queue-draft-item"
     >
-      <span {...attributes} {...listeners} className="cursor-grab text-muted-foreground">
+      <span {...attributes} {...listeners} className="fm-queue-draft-grip">
         <GripVertical className="h-3.5 w-3.5" />
       </span>
-      <span className="font-medium text-sm">
-        {index + 1}. {label}
+      <span className="fm-queue-draft-index">{index + 1}.</span>
+      <span className="fm-queue-draft-copy">
+        <span className="fm-queue-draft-provider">{providerName}</span>
+        <span className="fm-queue-draft-model">{modelName}</span>
       </span>
       <button
         onClick={() => onRemove(index)}
-        className="h-5 w-5 ml-auto rounded hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-destructive transition-colors"
+        className="fm-queue-draft-remove"
       >
         <X className="h-3 w-3" />
       </button>
@@ -95,12 +99,12 @@ export function QueueEditPanel({
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } })
   )
 
-  function getLabel(item: DraftItem): string {
+  function getItemDisplay(item: DraftItem): { providerName: string; modelName: string } {
     const provider = providers.find((p) => p.id === item.provider_id)
     const providerName = provider?.name ?? item.provider_id
     const model = provider?.models.find((m) => m.id === item.model_id)
     const modelName = model?.name ?? item.model_id
-    return `${providerName} / ${modelName}`
+    return { providerName, modelName }
   }
 
   const ids = items.map(queueItemKey)
@@ -153,7 +157,7 @@ export function QueueEditPanel({
           </div>
           {items.length === 0 ? (
             <div className="text-sm text-muted-foreground text-center py-8">
-              点击服务商模型的 + 添加
+              点击左侧模型添加
             </div>
           ) : (
             <DndContext
@@ -163,15 +167,19 @@ export function QueueEditPanel({
             >
               <SortableContext items={ids} strategy={verticalListSortingStrategy}>
                 <div className="flex flex-col gap-2">
-                  {items.map((item, i) => (
-                    <SortableDraftItem
-                      key={ids[i]}
-                      uid={ids[i]}
-                      index={i}
-                      label={getLabel(item)}
-                      onRemove={onRemoveItem}
-                    />
-                  ))}
+                  {items.map((item, i) => {
+                    const display = getItemDisplay(item)
+                    return (
+                      <SortableDraftItem
+                        key={ids[i]}
+                        uid={ids[i]}
+                        index={i}
+                        providerName={display.providerName}
+                        modelName={display.modelName}
+                        onRemove={onRemoveItem}
+                      />
+                    )
+                  })}
                 </div>
               </SortableContext>
             </DndContext>
