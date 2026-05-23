@@ -58,8 +58,8 @@ pub fn run() {
     // 迁移旧配置文件到 ~/.config/freemodel/
     migrate_config_files();
 
-    // 检查是否需要迁移（providers.json 不存在时）
-    if providers::needs_migration() {
+    // 迁移旧版 config.json 中的自定义供应商到 custom_providers.json
+    {
         let legacy_providers = providers::read_legacy_providers();
         if let Err(e) = providers::migrate_legacy_config(legacy_providers) {
             log::error!("[migrate] migration failed: {e}");
@@ -69,7 +69,10 @@ pub fn run() {
     let cfg = config::load_config();
     let port = cfg.port;
     let auth_map = auth::load_auth();
-    let all_providers = providers::get_all_providers();
+
+    // 预设供应商 = 内置（远程同步在启动后异步刷新）
+    let preset_providers = providers::load_builtin_providers();
+    let all_providers = providers::get_all_providers_with_preset(preset_providers);
     let shared_router = router::new_router_with_providers(&cfg, all_providers, auth_map);
     let proxy_logs = proxy_log::ProxyLogStore::new(200);
 
@@ -132,14 +135,14 @@ pub fn run() {
                 }
             });
 
-            // 启动后异步检查线上版本
+            // 启动后异步同步远程预设供应商
             let router_for_sync = router_clone.clone();
             tauri::async_runtime::spawn(async move {
-                let (_, updated) = providers::sync_providers().await;
-                if updated {
-                    let new_providers = providers::get_all_providers();
-                    router_for_sync.write().await.providers = new_providers;
-                    log::info!("[sync] router providers refreshed after remote update");
+                let (_, remote_config) = providers::sync_providers().await;
+                if let Some(config) = remote_config {
+                    let merged = providers::get_all_providers_with_preset(config.providers);
+                    router_for_sync.write().await.providers = merged;
+                    log::info!("[sync] router providers refreshed with remote data");
                 }
             });
 
@@ -816,7 +819,8 @@ async fn update_app_mapping_cmd(
 
 #[tauri::command]
 fn get_providers_cmd() -> Vec<config::Provider> {
-    providers::get_all_providers()
+    let preset = providers::load_builtin_providers();
+    providers::get_all_providers_with_preset(preset)
 }
 
 #[tauri::command]
@@ -1109,10 +1113,9 @@ fn migrate_config_files() {
         }
     }
 
-    // 需要迁移的文件
+    // 需要迁移的文件（预设供应商由内置+远程统一管理，不再迁移 providers.json）
     let files = [
         "config.json",
-        "providers.json",
         "custom_providers.json",
         "auth.json",
     ];

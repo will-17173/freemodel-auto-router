@@ -337,23 +337,6 @@ pub struct CompletionTokensDetails {
 }
 
 // ============================================================================
-// Scenario Types
-// ============================================================================
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub enum Scenario {
-    LongContext,
-    Complex,
-    Think,
-    Background,
-    Default,
-    Fast,
-}
-
-// Re-export from config for convenience
-pub use crate::config::ScenarioRoutingConfig;
-
-// ============================================================================
 // SSE Event Types (for Anthropic SSE output)
 // ============================================================================
 
@@ -693,59 +676,6 @@ pub fn openai_to_anthropic_response(
     })
 }
 
-/// Detect scenario from Anthropic request for model routing.
-pub fn detect_scenario(
-    req: &AnthropicMessageRequest,
-    config: &ScenarioRoutingConfig,
-) -> Scenario {
-    // Estimate token count (rough: chars / 4)
-    let text = estimate_request_text(req);
-    let token_estimate = text.len() / 4;
-
-    // Priority 1: Long context
-    if token_estimate > config.long_context_threshold {
-        return Scenario::LongContext;
-    }
-
-    let text_lower = text.to_lowercase();
-
-    // Priority 2: Complex
-    let complex_keywords = [
-        "architect", "refactor", "execute", "implement", "design", "build", "create", "develop",
-    ];
-    if complex_keywords.iter().any(|kw| text_lower.contains(kw)) {
-        return Scenario::Complex;
-    }
-
-    // Priority 3: Think
-    let think_keywords = ["think", "reason", "analyze", "consider", "evaluate", "plan"];
-    if think_keywords.iter().any(|kw| text_lower.contains(kw)) || has_thinking_blocks(&req.messages) {
-        return Scenario::Think;
-    }
-
-    // Priority 4: Background (simple read-only)
-    let bg_keywords = ["list", "show", "what is", "describe", "explain", "find", "search"];
-    let has_tools = req.tools.as_ref().map(|t| !t.is_empty()).unwrap_or(false);
-    if bg_keywords.iter().any(|kw| text_lower.contains(kw)) && !has_tools {
-        return Scenario::Background;
-    }
-
-    // Priority 5: Default
-    Scenario::Default
-}
-
-/// Get the model ID for a given scenario from routing config.
-pub fn scenario_to_model(scenario: &Scenario, config: &ScenarioRoutingConfig) -> String {
-    match scenario {
-        Scenario::LongContext => config.long_context_model.clone(),
-        Scenario::Complex => config.complex_model.clone(),
-        Scenario::Think => config.think_model.clone(),
-        Scenario::Background => config.background_model.clone(),
-        Scenario::Default => config.default_model.clone(),
-        Scenario::Fast => config.fast_model.clone(),
-    }
-}
-
 /// Check if the conversation history contains thinking blocks.
 pub fn has_thinking_blocks(messages: &[AnthropicMessage]) -> bool {
     messages.iter().any(|msg| {
@@ -758,49 +688,6 @@ pub fn has_thinking_blocks(messages: &[AnthropicMessage]) -> bool {
             false
         }
     })
-}
-
-/// Estimate total text content for token counting (rough approximation).
-fn estimate_request_text(req: &AnthropicMessageRequest) -> String {
-    let mut text = String::new();
-
-    // System
-    if let Some(system) = &req.system {
-        match system {
-            AnthropicSystem::String(s) => text.push_str(s),
-            AnthropicSystem::Blocks(blocks) => {
-                for block in blocks {
-                    if let Some(t) = &block.text {
-                        text.push_str(t);
-                    }
-                }
-            }
-        }
-    }
-
-    // Messages
-    for msg in &req.messages {
-        if let Some(content) = &msg.content {
-            match content {
-                AnthropicMessageContent::String(s) => text.push_str(s),
-                AnthropicMessageContent::Blocks(blocks) => {
-                    for block in blocks {
-                        if let Some(t) = &block.text {
-                            text.push_str(t);
-                        }
-                        if let Some(t) = &block.thinking {
-                            text.push_str(t);
-                        }
-                        if let Some(t) = &block.content {
-                            text.push_str(t);
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    text
 }
 
 /// Apply DeepSeek-specific thinking configuration to a ChatCompletionRequest.
@@ -1339,22 +1226,6 @@ mod tests {
     }
 
     // ========================================================================
-    // Scenario Routing Config Test
-    // ========================================================================
-
-    #[test]
-    fn scenario_routing_config_default() {
-        let config = ScenarioRoutingConfig::default();
-        assert_eq!(config.long_context_model, "minimax-m2.5");
-        assert_eq!(config.complex_model, "glm-5.1");
-        assert_eq!(config.think_model, "glm-5");
-        assert_eq!(config.background_model, "qwen3.5-plus");
-        assert_eq!(config.default_model, "kimi-k2.6");
-        assert_eq!(config.fast_model, "qwen3.6-plus");
-        assert_eq!(config.long_context_threshold, 80000);
-    }
-
-    // ========================================================================
     // Request Conversion Tests
     // ========================================================================
 
@@ -1644,112 +1515,6 @@ mod tests {
         let resp: ChatCompletionResponse = serde_json::from_str(json).unwrap();
         let anthropic_resp = openai_to_anthropic_response(&resp).unwrap();
         assert_eq!(anthropic_resp.stop_reason.as_deref(), Some("max_tokens"));
-    }
-
-    // ========================================================================
-    // Scenario Detection Tests
-    // ========================================================================
-
-    fn make_simple_request(text: &str) -> AnthropicMessageRequest {
-        AnthropicMessageRequest {
-            model: "claude-sonnet-4-6".to_string(),
-            messages: vec![AnthropicMessage {
-                role: "user".to_string(),
-                content: Some(AnthropicMessageContent::String(text.to_string())),
-            }],
-            system: None,
-            tools: None,
-            tool_choice: None,
-            stream: false,
-            max_tokens: Some(4096),
-            temperature: None,
-            top_p: None,
-            top_k: None,
-            metadata: None,
-            stop_sequences: None,
-            thinking: None,
-        }
-    }
-
-    #[test]
-    fn test_scenario_long_context() {
-        let config = ScenarioRoutingConfig::default();
-        // Threshold is text.len() / 4 > 80000, so text must be > 320000 chars
-        let long_text = "x".repeat(320005);
-        let req = make_simple_request(&long_text);
-        let scenario = detect_scenario(&req, &config);
-        assert_eq!(scenario, Scenario::LongContext);
-    }
-
-    #[test]
-    fn test_scenario_complex() {
-        let config = ScenarioRoutingConfig::default();
-        let req = make_simple_request("Please refactor this code to use a better architecture");
-        let scenario = detect_scenario(&req, &config);
-        assert_eq!(scenario, Scenario::Complex);
-    }
-
-    #[test]
-    fn test_scenario_think() {
-        let config = ScenarioRoutingConfig::default();
-        let req = make_simple_request("Think about the best approach for this problem");
-        let scenario = detect_scenario(&req, &config);
-        assert_eq!(scenario, Scenario::Think);
-    }
-
-    #[test]
-    fn test_scenario_think_with_thinking_blocks() {
-        let config = ScenarioRoutingConfig::default();
-        let mut req = make_simple_request("Hello");
-        // Add a message with thinking blocks
-        req.messages.push(AnthropicMessage {
-            role: "assistant".to_string(),
-            content: Some(AnthropicMessageContent::Blocks(vec![
-                AnthropicContentBlock {
-                    block_type: "thinking".to_string(),
-                    text: None,
-                    id: None,
-                    name: None,
-                    input: None,
-                    tool_use_id: None,
-                    content: None,
-                    thinking: Some("analyzing...".to_string()),
-                    signature: None,
-                    cache_control: None,
-                    source: None,
-                    image_url: None,
-                },
-            ])),
-        });
-        let scenario = detect_scenario(&req, &config);
-        assert_eq!(scenario, Scenario::Think);
-    }
-
-    #[test]
-    fn test_scenario_background() {
-        let config = ScenarioRoutingConfig::default();
-        let req = make_simple_request("List all files in the directory");
-        let scenario = detect_scenario(&req, &config);
-        assert_eq!(scenario, Scenario::Background);
-    }
-
-    #[test]
-    fn test_scenario_default() {
-        let config = ScenarioRoutingConfig::default();
-        let req = make_simple_request("Hello, how are you?");
-        let scenario = detect_scenario(&req, &config);
-        assert_eq!(scenario, Scenario::Default);
-    }
-
-    #[test]
-    fn test_scenario_to_model() {
-        let config = ScenarioRoutingConfig::default();
-        assert_eq!(scenario_to_model(&Scenario::LongContext, &config), "minimax-m2.5");
-        assert_eq!(scenario_to_model(&Scenario::Complex, &config), "glm-5.1");
-        assert_eq!(scenario_to_model(&Scenario::Think, &config), "glm-5");
-        assert_eq!(scenario_to_model(&Scenario::Background, &config), "qwen3.5-plus");
-        assert_eq!(scenario_to_model(&Scenario::Default, &config), "kimi-k2.6");
-        assert_eq!(scenario_to_model(&Scenario::Fast, &config), "qwen3.6-plus");
     }
 
     // ========================================================================

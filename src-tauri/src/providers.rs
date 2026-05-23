@@ -1,7 +1,5 @@
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
-use std::fs;
-use std::path::PathBuf;
 
 // Re-export Provider and Model for use by other modules that import from providers
 pub use crate::config::config_dir;
@@ -13,7 +11,7 @@ pub const CURRENT_FORMAT_VERSION: u32 = 1;
 /// 线上配置的基础 URL
 pub const REMOTE_BASE_URL: &str = "https://www.coding-plan.xyz/freemodel-auto-router";
 
-/// providers.json 结构（预设供应商，从线上同步）
+/// 预设供应商配置（内置 + 远程同步）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProvidersConfig {
     /// 时间戳版本，用于判断是否需要更新
@@ -45,63 +43,23 @@ pub struct CustomProvidersConfig {
     pub custom_models_in_builtin: std::collections::HashMap<String, Vec<Model>>,
 }
 
-/// 获取 providers.json 文件路径
-pub fn providers_path() -> PathBuf {
-    config_dir().join("providers.json")
-}
-
 /// 获取 custom_providers.json 文件路径
-pub fn custom_providers_path() -> PathBuf {
+pub fn custom_providers_path() -> std::path::PathBuf {
     config_dir().join("custom_providers.json")
 }
 
 /// 加载内置默认供应商配置（从 builtin_providers.json）
-fn load_builtin_providers_config() -> ProvidersConfig {
+pub fn load_builtin_providers() -> Vec<Provider> {
     const BUILTIN_PROVIDERS_JSON: &str = include_str!("../builtin_providers.json");
-    serde_json::from_str(BUILTIN_PROVIDERS_JSON)
-        .expect("builtin_providers.json should be valid JSON")
-}
-
-/// 加载本地 providers.json，不存在则用内置默认
-pub fn load_providers() -> ProvidersConfig {
-    let path = providers_path();
-    if let Ok(s) = fs::read_to_string(&path) {
-        match serde_json::from_str::<ProvidersConfig>(&s) {
-            Ok(cfg) => {
-                log::info!(
-                    "[providers] loaded {} providers from {:?}",
-                    cfg.providers.len(),
-                    path
-                );
-                cfg
-            }
-            Err(e) => {
-                log::error!("[providers] parse error: {e}, using builtin defaults");
-                load_builtin_providers_config()
-            }
-        }
-    } else {
-        log::info!(
-            "[providers] file not found at {:?}, using builtin defaults",
-            path
-        );
-        load_builtin_providers_config()
-    }
-}
-
-/// 保存 providers.json
-pub fn save_providers(config: &ProvidersConfig) -> Result<()> {
-    let path = providers_path();
-    fs::create_dir_all(path.parent().unwrap())?;
-    let s = serde_json::to_string_pretty(config)?;
-    fs::write(&path, s)?;
-    Ok(())
+    let config: ProvidersConfig = serde_json::from_str(BUILTIN_PROVIDERS_JSON)
+        .expect("builtin_providers.json should be valid JSON");
+    config.providers
 }
 
 /// 加载本地 custom_providers.json，不存在则返回空对象
 pub fn load_custom_providers() -> CustomProvidersConfig {
     let path = custom_providers_path();
-    if let Ok(s) = fs::read_to_string(&path) {
+    if let Ok(s) = std::fs::read_to_string(&path) {
         match serde_json::from_str::<CustomProvidersConfig>(&s) {
             Ok(cfg) => cfg,
             Err(e) => {
@@ -117,20 +75,20 @@ pub fn load_custom_providers() -> CustomProvidersConfig {
 /// 保存 custom_providers.json
 pub fn save_custom_providers(config: &CustomProvidersConfig) -> Result<()> {
     let path = custom_providers_path();
-    fs::create_dir_all(path.parent().unwrap())?;
+    std::fs::create_dir_all(path.parent().unwrap())?;
     let s = serde_json::to_string_pretty(config)?;
-    fs::write(&path, s)?;
+    std::fs::write(&path, s)?;
     Ok(())
 }
 
 /// 合并预设供应商与用户自定义数据，返回完整供应商列表
 pub fn merge_providers(
-    builtin: Vec<Provider>,
+    preset: Vec<Provider>,
     custom_providers: Vec<Provider>,
     custom_models_in_builtin: std::collections::HashMap<String, Vec<Model>>,
 ) -> Vec<Provider> {
     // 1. 处理预设供应商：追加自定义模型
-    let merged_builtin: Vec<Provider> = builtin
+    let merged_preset: Vec<Provider> = preset
         .into_iter()
         .map(|provider| {
             let custom_models = custom_models_in_builtin
@@ -146,14 +104,14 @@ pub fn merge_providers(
         .collect();
 
     // 2. 合并预设供应商 + 用户自定义供应商
-    let mut all_providers = merged_builtin;
+    let mut all_providers = merged_preset;
     all_providers.extend(custom_providers);
 
-    // 3. 用内置配置补充缺失的 description（本地/远程配置可能未包含）
-    let builtin_defaults = load_builtin_providers_config();
+    // 3. 用内置配置补充缺失的 description（远程配置可能未包含）
+    let builtin_defaults = load_builtin_providers();
     for provider in &mut all_providers {
         if provider.description.is_none() {
-            if let Some(default) = builtin_defaults.providers.iter().find(|p| p.id == provider.id) {
+            if let Some(default) = builtin_defaults.iter().find(|p| p.id == provider.id) {
                 if default.description.is_some() {
                     provider.description = default.description.clone();
                 }
@@ -168,20 +126,20 @@ pub fn merge_providers(
 }
 
 /// 获取合并后的完整供应商列表（供前端使用）
-pub fn get_all_providers() -> Vec<Provider> {
-    let providers_config = load_providers();
+/// 数据来源：内置 + 远程同步（远程 version 更高时替换内置）+ 用户自定义
+pub fn get_all_providers_with_preset(preset: Vec<Provider>) -> Vec<Provider> {
     let custom_config = load_custom_providers();
 
     merge_providers(
-        providers_config.providers,
+        preset,
         custom_config.custom_providers,
         custom_config.custom_models_in_builtin,
     )
 }
 
 /// 异步同步线上供应商配置
-/// 返回 (是否请求成功, 是否有版本更新)
-pub async fn sync_providers() -> (bool, bool) {
+/// 返回 (是否请求成功, 远程 ProvidersConfig 如果有更新)
+pub async fn sync_providers() -> (bool, Option<ProvidersConfig>) {
     let url = format!(
         "{}/v{}/providers.json",
         REMOTE_BASE_URL, CURRENT_FORMAT_VERSION
@@ -196,28 +154,28 @@ pub async fn sync_providers() -> (bool, bool) {
         Ok(c) => c,
         Err(e) => {
             log::error!("[sync] client build error: {e}");
-            return (false, false);
+            return (false, None);
         }
     };
 
     let response = match client.get(&url).send().await {
         Ok(r) => r,
         Err(e) => {
-            log::warn!("[sync] network error: {e}, using local data");
-            return (false, false);
+            log::warn!("[sync] network error: {e}, using builtin providers");
+            return (false, None);
         }
     };
 
     if !response.status().is_success() {
         log::warn!("[sync] remote returned status {}", response.status());
-        return (false, false);
+        return (false, None);
     }
 
     let body = match response.text().await {
         Ok(t) => t,
         Err(e) => {
             log::error!("[sync] read response error: {e}");
-            return (false, false);
+            return (false, None);
         }
     };
 
@@ -225,40 +183,42 @@ pub async fn sync_providers() -> (bool, bool) {
         Ok(c) => c,
         Err(e) => {
             log::error!("[sync] parse remote json error: {e}");
-            return (false, false);
+            return (false, None);
         }
     };
 
-    let local_config = load_providers();
+    let builtin_version = get_builtin_version();
 
-    if remote_config.version > local_config.version {
+    if remote_config.version > builtin_version {
         log::info!(
-            "[sync] remote version {} > local version {}, updating",
+            "[sync] remote version {} > builtin version {}, using remote",
             remote_config.version,
-            local_config.version
+            builtin_version
         );
-        if let Err(e) = save_providers(&remote_config) {
-            log::error!("[sync] save error: {e}");
-            return (false, false);
-        }
-        log::info!("[sync] providers.json updated successfully");
-        (true, true)
+        (true, Some(remote_config))
     } else {
         log::info!(
-            "[sync] remote version {} <= local version {}, no update needed",
+            "[sync] remote version {} <= builtin version {}, keeping builtin",
             remote_config.version,
-            local_config.version
+            builtin_version
         );
-        (true, false)
+        (true, None)
     }
 }
 
-/// 迁移旧配置：将 config.json 中的 providers 分离到新文件结构
+/// 获取内置配置的版本号
+fn get_builtin_version() -> u64 {
+    const BUILTIN_PROVIDERS_JSON: &str = include_str!("../builtin_providers.json");
+    serde_json::from_str::<ProvidersConfig>(BUILTIN_PROVIDERS_JSON)
+        .map(|c| c.version)
+        .unwrap_or(0)
+}
+
+/// 迁移旧配置：将旧 config.json 中的 providers 分离到 custom_providers.json
 pub fn migrate_legacy_config(old_providers: Vec<Provider>) -> Result<()> {
     if old_providers.is_empty() {
-        log::info!("[migrate] no legacy providers, creating default providers.json");
-        let providers_config = load_builtin_providers_config();
-        return save_providers(&providers_config);
+        log::info!("[migrate] no legacy providers, nothing to migrate");
+        return Ok(());
     }
 
     log::info!(
@@ -266,19 +226,21 @@ pub fn migrate_legacy_config(old_providers: Vec<Provider>) -> Result<()> {
         old_providers.len()
     );
 
-    // 分离预设供应商和自定义供应商
-    let (builtin_providers, custom_providers): (Vec<Provider>, Vec<Provider>) =
-        old_providers.into_iter().partition(|p| !p.is_custom);
+    // 分离自定义供应商（预设供应商不再写入文件，由内置+远程统一管理）
+    let custom_providers: Vec<Provider> = old_providers
+        .into_iter()
+        .filter(|p| p.is_custom)
+        .collect();
 
-    // 分离预设供应商中的自定义模型
+    // 从自定义供应商中分离自定义模型
     let mut custom_models_in_builtin: std::collections::HashMap<String, Vec<Model>> =
         std::collections::HashMap::new();
 
-    let builtin_providers_cleaned: Vec<Provider> = builtin_providers
+    let custom_providers_cleaned: Vec<Provider> = custom_providers
         .into_iter()
         .map(|provider| {
             let (builtin_models, custom_models): (Vec<Model>, Vec<Model>) =
-                provider.models.iter().cloned().partition(|m| !m.is_custom);
+                provider.models.into_iter().partition(|m| !m.is_custom);
 
             if !custom_models.is_empty() {
                 custom_models_in_builtin.insert(provider.id.clone(), custom_models);
@@ -291,44 +253,27 @@ pub fn migrate_legacy_config(old_providers: Vec<Provider>) -> Result<()> {
         })
         .collect();
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs())
-        .unwrap_or(0);
-
-    let providers_config = ProvidersConfig {
-        version: timestamp,
-        format_version: CURRENT_FORMAT_VERSION,
-        providers: builtin_providers_cleaned,
-    };
-
     let custom_config = CustomProvidersConfig {
-        custom_providers,
+        custom_providers: custom_providers_cleaned,
         custom_models_in_builtin,
     };
 
-    save_providers(&providers_config)?;
     save_custom_providers(&custom_config)?;
 
     log::info!("[migrate] migration completed");
     Ok(())
 }
 
-/// 检查是否需要迁移（providers.json 不存在时需要迁移）
-pub fn needs_migration() -> bool {
-    !providers_path().exists()
-}
-
 /// 从旧 config.json 读取 providers 字段（迁移用）
 pub(crate) fn read_legacy_providers() -> Vec<Provider> {
     // 旧版 config.json 在应用目录
-    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("."))
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join("config.json");
 
-    let Ok(s) = fs::read_to_string(&path) else {
+    let Ok(s) = std::fs::read_to_string(&path) else {
         return vec![];
     };
 
@@ -424,7 +369,7 @@ mod tests {
             assert!(provider
                 .get("link")
                 .and_then(|v| v.as_str())
-                .is_some_and(|link| link.starts_with("https://")));
+                .is_some_and(|link| link.startsWith("https://")));
 
             let models = provider["models"]
                 .as_array()

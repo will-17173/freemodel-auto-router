@@ -1,33 +1,19 @@
 import { useState } from "react"
 import { openUrl } from "@tauri-apps/plugin-opener"
-import type { RetryConfig, ScenarioRoutingConfig, UpdateInfo } from "@/types"
+import type { RetryConfig, UpdateInfo } from "@/types"
 import { checkUpdate } from "@/api"
-
-const SCENARIO_LABELS: Record<string, string> = {
-  long_context_model: "长上下文",
-  complex_model: "复杂任务",
-  think_model: "思考推理",
-  background_model: "后台任务",
-  default_model: "默认",
-  fast_model: "快速响应",
-}
 
 interface SettingsPageProps {
   retry: RetryConfig
   port: number
-  scenarioRouting: ScenarioRoutingConfig
-  respectRequestedModel: boolean
   onSave: (retry: RetryConfig, newPort: number, portChanged: boolean) => void
-  onSaveScenarioRouting: (config: ScenarioRoutingConfig, respectRequestedModel: boolean) => void
 }
 
-export function SettingsPage({ retry, port, scenarioRouting, respectRequestedModel, onSave, onSaveScenarioRouting }: SettingsPageProps) {
+export function SettingsPage({ retry, port, onSave }: SettingsPageProps) {
   const [maxRetries, setMaxRetries] = useState(String(retry.max_retries))
   const [retryDelay, setRetryDelay] = useState(String(retry.retry_delay_secs))
   const [portValue, setPortValue] = useState(String(port))
   const [saving, setSaving] = useState(false)
-  const [scenarioConfig, setScenarioConfig] = useState<ScenarioRoutingConfig>(scenarioRouting)
-  const [respectModel, setRespectModel] = useState(respectRequestedModel)
 
   // 版本检查状态
   const [checkingUpdate, setCheckingUpdate] = useState(false)
@@ -43,12 +29,7 @@ export function SettingsPage({ retry, port, scenarioRouting, respectRequestedMod
     const portChanged = newPort !== port
     setSaving(true)
     onSave({ max_retries: max, retry_delay_secs: delay }, newPort, portChanged)
-    onSaveScenarioRouting(scenarioConfig, respectModel)
     setSaving(false)
-  }
-
-  function updateScenarioField(field: keyof ScenarioRoutingConfig, value: string) {
-    setScenarioConfig(prev => ({ ...prev, [field]: value }))
   }
 
   async function handleCheckUpdate() {
@@ -119,50 +100,6 @@ export function SettingsPage({ retry, port, scenarioRouting, respectRequestedMod
         <button onClick={handleSave} disabled={saving} className="fm-btn-primary mt-6">
           {saving ? "保存中..." : "保存"}
         </button>
-      </div>
-
-      {/* 场景路由配置 */}
-      <div className="mt-10 pt-6 border-t border-[var(--fm-border)]">
-        <h2 className="fm-eyebrow mb-4">场景路由</h2>
-        <p className="fm-caption mb-4">根据请求内容自动选择模型。仅对 Anthropic→OpenAI 转换路径生效。</p>
-
-        <div className="space-y-3 max-w-md">
-          {(["long_context_model", "complex_model", "think_model", "background_model", "default_model", "fast_model"] as const).map(field => (
-            <div key={field} className="space-y-1">
-              <label className="fm-eyebrow">{SCENARIO_LABELS[field]}</label>
-              <input
-                type="text"
-                value={scenarioConfig[field]}
-                onChange={(e) => updateScenarioField(field, e.target.value)}
-                className="fm-input font-mono text-sm"
-                placeholder="模型 ID"
-              />
-            </div>
-          ))}
-
-          <div className="space-y-1">
-            <label className="fm-eyebrow">长上下文阈值（字符数）</label>
-            <input
-              type="number"
-              min={1000}
-              max={500000}
-              value={scenarioConfig.long_context_threshold}
-              onChange={(e) => updateScenarioField("long_context_threshold", e.target.value)}
-              className="fm-input font-mono text-sm"
-            />
-            <p className="fm-caption">请求文本超过此字符数时路由到长上下文模型（估算：字符数/4 ≈ token 数）</p>
-          </div>
-
-          <label className="flex items-center gap-2 cursor-pointer mt-2">
-            <input
-              type="checkbox"
-              checked={respectModel}
-              onChange={(e) => setRespectModel(e.target.checked)}
-              className="w-4 h-4 rounded border-[var(--fm-border)]"
-            />
-            <span className="text-sm text-[var(--fm-text)]">尊重请求中的模型（跳过场景检测）</span>
-          </label>
-        </div>
       </div>
 
       {/* 版本检查区域 */}

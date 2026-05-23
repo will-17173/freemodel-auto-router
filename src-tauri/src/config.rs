@@ -149,46 +149,6 @@ pub struct AppMapping {
     pub queue_id: String,
 }
 
-/// Scenario for model routing based on request content.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[serde(rename_all = "snake_case")]
-#[allow(dead_code)]
-pub enum Scenario {
-    LongContext,
-    Complex,
-    Think,
-    Background,
-    Default,
-    Fast,
-}
-
-/// Configuration for scenario-based model routing.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ScenarioRoutingConfig {
-    pub long_context_model: String,
-    pub complex_model: String,
-    pub think_model: String,
-    pub background_model: String,
-    pub default_model: String,
-    pub fast_model: String,
-    /// Token count threshold for LongContext scenario (default: 80000)
-    pub long_context_threshold: usize,
-}
-
-impl Default for ScenarioRoutingConfig {
-    fn default() -> Self {
-        Self {
-            long_context_model: "minimax-m2.5".to_string(),
-            complex_model: "glm-5.1".to_string(),
-            think_model: "glm-5".to_string(),
-            background_model: "qwen3.5-plus".to_string(),
-            default_model: "kimi-k2.6".to_string(),
-            fast_model: "qwen3.6-plus".to_string(),
-            long_context_threshold: 80000,
-        }
-    }
-}
-
 fn default_port() -> u16 {
     7860
 }
@@ -220,12 +180,6 @@ pub struct AppConfig {
     pub app_mapping: Vec<AppMapping>,
     #[serde(default = "default_queue_id")]
     pub default_queue_id: String,
-    // 场景路由配置
-    #[serde(default)]
-    pub scenario_routing: ScenarioRoutingConfig,
-    /// If true, respect the model requested by the client instead of scenario detection
-    #[serde(default)]
-    pub respect_requested_model: bool,
     // 保留旧字段用于迁移检测（序列化时跳过）
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub queue: Vec<QueueItem>,
@@ -241,8 +195,6 @@ impl Default for AppConfig {
             queues: default_queues(),
             app_mapping: vec![],
             default_queue_id: default_queue_id(),
-            scenario_routing: ScenarioRoutingConfig::default(),
-            respect_requested_model: true,
             queue: vec![],
         }
     }
