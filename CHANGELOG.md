@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-05-23
+
+### Added
+
+- OpenCode Go 集成 — 支持 OpenCode Go 订阅转 Claude Code 协议的 Anthropic 请求/响应转换
+- 多供应商配置系统 — 前端 UI 管理供应商和模型，支持添加自定义供应商
+- 多队列和应用检测增强 — 改进的路由和应用识别能力
+
+### Changed
+
+- **移除场景路由功能** — 请求模型始终使用队列中指定的模型，不再根据请求内容自动切换
+- 内置供应商配置版本提升至 2，防止远程同步覆盖本地供应商
+- 添加 OpenCode Go 集成设计文档和实现计划
+
+### Fixed
+
+- 修复 `path_entries()` 中 `entries` 变量缺少 `mut` 关键字的问题
+
 ## [0.1.3] - 2026-05-19
 
 ### Fixed
