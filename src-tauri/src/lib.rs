@@ -79,6 +79,12 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            if let Some(win) = app.get_webview_window("main") {
+                let _ = win.show();
+                let _ = win.set_focus();
+            }
+        }))
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Debug)
@@ -153,19 +159,28 @@ pub fn run() {
                 proxy_logs: proxy_logs_clone,
             }))));
 
-            // System tray
+            // System tray with menu
             let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?;
+
+            let open_item = tauri::menu::MenuItem::with_id(app, "open", "打开应用", true, None::<&str>)?;
+            let quit_item = tauri::menu::MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
+            let menu = tauri::menu::Menu::with_items(app, &[&open_item, &quit_item])?;
+
             let _tray = tauri::tray::TrayIconBuilder::new()
                 .icon(tray_icon)
                 .tooltip("freemodel router")
-                .on_tray_icon_event(|tray, event| {
-                    if let tauri::tray::TrayIconEvent::Click { .. } = event {
-                        let app = tray.app_handle();
+                .menu(&menu)
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "open" => {
                         if let Some(win) = app.get_webview_window("main") {
                             let _ = win.show();
                             let _ = win.set_focus();
                         }
                     }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
                 })
                 .build(app)?;
 

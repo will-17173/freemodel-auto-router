@@ -579,8 +579,6 @@ function AppContent() {
             <SettingsPage
               retry={config.retry}
               port={config.port}
-              scenarioRouting={config.scenario_routing}
-              respectRequestedModel={config.respect_requested_model}
               onSave={(retry, newPort, portChanged) => {
                 const next = { ...config, retry, port: newPort };
                 updateAndSave(next);
@@ -604,10 +602,6 @@ function AppContent() {
                     }
                   }).catch(console.error);
                 }
-              }}
-              onSaveScenarioRouting={(scenarioRouting, respectRequestedModel) => {
-                const next = { ...config, scenario_routing: scenarioRouting, respect_requested_model: respectRequestedModel };
-                updateAndSave(next);
               }}
             />
           )}

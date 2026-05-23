@@ -880,30 +880,12 @@ async fn handle_anthropic_to_openai(
         }
     };
 
-    // Determine the effective model to use.
-    // If respect_requested_model is true (default), use the model from the queue.
-    // If false, run scenario detection to auto-select a model.
-    let (effective_model, scenario_label) = {
-        let r = state.router.read().await;
-        if r.respect_requested_model {
-            (model_id.to_string(), "user_selected".to_string())
-        } else {
-            let scenario = transformer::detect_scenario(&anthropic_req, &r.scenario_routing);
-            let routed = transformer::scenario_to_model(&scenario, &r.scenario_routing);
-            let model = if routed.is_empty() {
-                model_id.to_string()
-            } else {
-                routed
-            };
-            (model, format!("{:?}", scenario))
-        }
-    };
+    // Always use the model specified in the queue.
+    let effective_model = model_id.to_string();
 
     log::info!(
-        "[convert] model={} -> {} ({})",
-        model_id,
+        "[convert] model={}",
         effective_model,
-        scenario_label,
     );
 
     // Convert to OpenAI request
