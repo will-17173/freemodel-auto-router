@@ -45,7 +45,7 @@ fn command_version(command_path: &Path) -> Option<String> {
 }
 
 fn path_entries() -> Vec<PathBuf> {
-    let mut entries: Vec<PathBuf> = env::var_os("PATH")
+    let entries: Vec<PathBuf> = env::var_os("PATH")
         .map(|path| env::split_paths(&path).collect())
         .unwrap_or_default();
 
@@ -134,6 +134,7 @@ fn command_from_login_shell(_command: &str) -> Option<PathBuf> {
     None
 }
 
+#[allow(dead_code)]
 fn shell_escape(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\\''"))
 }

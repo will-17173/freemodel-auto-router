@@ -149,7 +149,19 @@ pub fn merge_providers(
     let mut all_providers = merged_builtin;
     all_providers.extend(custom_providers);
 
-    // 3. 按 priority 排序（降序）
+    // 3. 用内置配置补充缺失的 description（本地/远程配置可能未包含）
+    let builtin_defaults = load_builtin_providers_config();
+    for provider in &mut all_providers {
+        if provider.description.is_none() {
+            if let Some(default) = builtin_defaults.providers.iter().find(|p| p.id == provider.id) {
+                if default.description.is_some() {
+                    provider.description = default.description.clone();
+                }
+            }
+        }
+    }
+
+    // 4. 按 priority 排序（降序）
     all_providers.sort_by(|a, b| b.priority.cmp(&a.priority));
 
     all_providers
