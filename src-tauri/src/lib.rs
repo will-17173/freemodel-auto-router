@@ -9,10 +9,33 @@ mod providers;
 mod proxy;
 mod proxy_log;
 mod router;
+mod transformer;
 
 use std::sync::Arc;
 use tauri::Manager;
 use tokio::sync::{watch, Mutex};
+
+/// 智能拼接 URL，避免路径重复
+/// 例如：
+/// - base: "https://api.example.com/v1", path: "/v1/chat/completions"
+///   → "https://api.example.com/v1/chat/completions"
+/// - base: "https://api.example.com", path: "/v1/chat/completions"
+///   → "https://api.example.com/v1/chat/completions"
+pub(crate) fn smart_url_join(base: &str, path: &str) -> String {
+    let base_trimmed = base.trim_end_matches('/');
+
+    // 检查 path 的路径部分是否已经在 base 中存在
+    // 例如 base 以 "/v1" 结尾，path 以 "/v1" 开头
+    if let Some(stripped) = path.strip_prefix("/v1") {
+        if base_trimmed.ends_with("/v1") {
+            // 避免重复，去掉 path 的 "/v1" 前缀
+            return format!("{}{}", base_trimmed, stripped);
+        }
+    }
+
+    // 默认直接拼接
+    format!("{}{}", base_trimmed, path)
+}
 
 /// Managed state for proxy lifecycle control — wrapped in Arc<Mutex>
 /// so the restart command can replace the shutdown sender.
@@ -906,11 +929,7 @@ async fn test_provider_connection(
             let url = if provider.anthropic_url.is_empty() {
                 return Err("anthropic_url 未配置".to_string());
             } else {
-                format!(
-                    "{}{}",
-                    provider.anthropic_url.trim_end_matches('/'),
-                    "/v1/messages"
-                )
+                crate::smart_url_join(&provider.anthropic_url, "/v1/messages")
             };
 
             let mut headers = reqwest::header::HeaderMap::new();
@@ -996,25 +1015,37 @@ async fn test_provider_connection(
             }
         }
         config::Protocol::OpenAI => {
-            // 使用 openai_url 测试 /v1/models 端点（更简单）
+            // 使用 openai_url 测试 /v1/chat/completions 端点（发送最小请求）
             let url = if provider.openai_url.is_empty() {
                 return Err("openai_url 未配置".to_string());
             } else {
-                format!(
-                    "{}{}",
-                    provider.openai_url.trim_end_matches('/'),
-                    "/v1/models"
-                )
+                crate::smart_url_join(&provider.openai_url, "/v1/chat/completions")
             };
 
             let mut headers = reqwest::header::HeaderMap::new();
+            headers.insert(
+                "content-type",
+                reqwest::header::HeaderValue::from_static("application/json"),
+            );
             if let Ok(value) =
                 reqwest::header::HeaderValue::from_str(&format!("Bearer {}", api_key))
             {
                 headers.insert("authorization", value);
             }
 
-            let response = client.get(&url).headers(headers).send().await;
+            // 发送最小请求测试连接
+            let test_body = serde_json::json!({
+                "model": provider.models.first().map(|m| m.id.as_str()).unwrap_or("gpt-4o-mini"),
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "test"}]
+            });
+
+            let response = client
+                .post(&url)
+                .headers(headers)
+                .json(&test_body)
+                .send()
+                .await;
 
             match response {
                 Ok(resp) => {

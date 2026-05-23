@@ -213,7 +213,7 @@ export function ProvidersPage({
                 )}
               >
                 {/* Card header */}
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
                     {authMap[provider.id] && (
                       <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
@@ -311,6 +311,9 @@ export function ProvidersPage({
                     </button>
                   </div>
                 </div>
+                {provider.description && (
+                  <p className="text-[10px] text-muted-foreground/70 mb-2 -mt-1 leading-snug">{provider.description}</p>
+                )}
                 {/* Models */}
                 {(() => {
                   const isExpanded = expandedProviders[provider.id]

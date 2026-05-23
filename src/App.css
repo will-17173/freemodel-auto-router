@@ -1,21 +1,13 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
 
 @font-face {
-  font-family: "ShareTechMono";
-  src: url("./assets/fonts/ShareTechMono-Regular.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "MonuTitl";
-  src: url("./assets/fonts/MonuTitl-0.95CnMd.woff2") format("woff2");
-  font-weight: 500;
+  font-family: "NotoSansSC";
+  src: url("./assets/fonts/NotoSansSC-VariableFont_wght.ttf") format("truetype");
+  font-weight: 100 900;
   font-style: normal;
 }
 
@@ -68,8 +60,8 @@
   --radius: 0.625rem;
 
   /* Legacy fm-* tokens — light theme */
-  --fm-font-sans: monospace, sans-serif;
-  --fm-font-mono: system-ui, sans-serif;
+  --fm-font-sans: "NotoSansSC", sans-serif;
+  --fm-font-mono: "NotoSansSC", sans-serif;
 
   /* Page layers */
   --fm-canvas:       #eef3f0;
@@ -640,7 +632,7 @@ body {
 
 @theme inline {
   --font-heading: var(--font-sans);
-  --font-sans: 'Geist Variable', sans-serif;
+  --font-sans: 'NotoSansSC', sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
