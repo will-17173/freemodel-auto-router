@@ -2,6 +2,7 @@ use crate::config::AuthScheme;
 use crate::proxy_log::{LogLevel, ProxyLogEntry, ProxyLogStore};
 use crate::router::FailureAction;
 use crate::router::SharedRouter;
+use crate::transformer;
 use axum::body::Body;
 use axum::extract::State;
 use axum::http::{HeaderMap, HeaderValue, Request, Response, StatusCode};
@@ -51,6 +52,18 @@ impl RequestLogFinalizer {
     fn update(&self, status: u16) {
         let duration_ms = self.start_time.elapsed().as_millis() as u64;
         let tracker = self.usage_tracker.lock().unwrap();
+        let in_str = tracker
+            .input_tokens
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        let out_str = tracker
+            .output_tokens
+            .map(|v| v.to_string())
+            .unwrap_or_else(|| "-".to_string());
+        log::info!(
+            "[proxy] done | status={} in={} out={} dur={}ms",
+            status, in_str, out_str, duration_ms,
+        );
         self.logs.update_request_log(
             self.log_id,
             Some(status),
@@ -90,7 +103,6 @@ impl UsageTracker {
 
             // 解析完整事件
             if let Some((event_type, data)) = parse_sse_event(&event_str) {
-                log::debug!("[usage] event_type={}, data={}", event_type, data);
                 self.extract_usage(&event_type, data);
             }
         }
@@ -107,7 +119,6 @@ impl UsageTracker {
             if event_type == "message_start" {
                 if let Some(usage) = json.get("message").and_then(|m| m.get("usage")) {
                     if let Some(input) = usage.get("input_tokens").and_then(|v| v.as_u64()) {
-                        log::debug!("[usage] found input_tokens={} in message_start", input);
                         self.input_tokens = Some(input);
                     }
                 }
@@ -118,12 +129,10 @@ impl UsageTracker {
                 if let Some(usage) = json.get("usage") {
                     // 提取 input_tokens（如果有的话，兼容非标准格式）
                     if let Some(input) = usage.get("input_tokens").and_then(|v| v.as_u64()) {
-                        log::debug!("[usage] found input_tokens={} in message_delta", input);
                         self.input_tokens = Some(input);
                     }
                     // 提取 output_tokens
                     if let Some(output) = usage.get("output_tokens").and_then(|v| v.as_u64()) {
-                        log::debug!("[usage] found output_tokens={} in message_delta", output);
                         self.output_tokens = Some(output);
                     }
                 }
@@ -268,11 +277,11 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         .collect();
 
     log::debug!(
-        "[proxy] inbound {} {} | queue_id={} has_auth={}",
+        "[proxy] >> {} {} queue={} auth={}",
         method,
         path,
         queue_id,
-        original_headers.contains_key("authorization"),
+        if original_headers.contains_key("authorization") { "yes" } else { "no" },
     );
     state.logs.push_with_headers(
         LogLevel::Info,
@@ -295,24 +304,38 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             let r = state.router.read().await;
             match r.active_entry_for_queue(&queue_id) {
                 Some((p, mid)) => {
-                    let target_url = match route_prefix {
-                        RoutePrefix::Anthropic => {
-                            if p.anthropic_url.is_empty() {
-                                return error_response(
-                                    StatusCode::SERVICE_UNAVAILABLE,
-                                    "provider has no anthropic_url configured",
-                                );
-                            }
-                            p.anthropic_url.clone()
+                    // For OpenAI-protocol providers (conversion path), always use openai_url
+                    // even when the inbound request is on the /anthropic prefix.
+                    let is_conversion =
+                        route_prefix == RoutePrefix::Anthropic && p.protocol == crate::config::Protocol::OpenAI;
+                    let target_url = if is_conversion {
+                        if p.openai_url.is_empty() {
+                            return error_response(
+                                StatusCode::SERVICE_UNAVAILABLE,
+                                "provider has no openai_url configured for conversion",
+                            );
                         }
-                        RoutePrefix::OpenAI => {
-                            if p.openai_url.is_empty() {
-                                return error_response(
-                                    StatusCode::SERVICE_UNAVAILABLE,
-                                    "provider has no openai_url configured",
-                                );
+                        p.openai_url.clone()
+                    } else {
+                        match route_prefix {
+                            RoutePrefix::Anthropic => {
+                                if p.anthropic_url.is_empty() {
+                                    return error_response(
+                                        StatusCode::SERVICE_UNAVAILABLE,
+                                        "provider has no anthropic_url configured",
+                                    );
+                                }
+                                p.anthropic_url.clone()
                             }
-                            p.openai_url.clone()
+                            RoutePrefix::OpenAI => {
+                                if p.openai_url.is_empty() {
+                                    return error_response(
+                                        StatusCode::SERVICE_UNAVAILABLE,
+                                        "provider has no openai_url configured",
+                                    );
+                                }
+                                p.openai_url.clone()
+                            }
                         }
                     };
                     (
@@ -339,10 +362,48 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             r.get_api_key(&provider_id).unwrap_or_default().to_owned()
         };
 
+        // 请求开始时创建日志条目（is_final=false），显示"请求进行中"
+        let log_id = state.logs.create_request_log(
+            LogLevel::Info,
+            "request",
+            [
+                ("provider", provider_name.clone()),
+                ("model", model_id.clone()),
+            ],
+            Some(provider_name.clone()),
+            Some(model_id.clone()),
+            Some(inbound_headers_map.clone()),
+        );
+
+        let start_time = Instant::now();
+
+        // Anthropic → OpenAI conversion path
+        if route_prefix == RoutePrefix::Anthropic
+            && protocol == crate::config::Protocol::OpenAI
+        {
+            return handle_anthropic_to_openai(
+                &body_bytes,
+                &original_headers,
+                &state,
+                &target_url,
+                &stripped_path,
+                &api_key,
+                &provider_name,
+                &provider_id,
+                &queue_id,
+                &model_id,
+                log_id,
+                start_time,
+                &inbound_headers_map,
+                retry_delay,
+            )
+            .await;
+        }
+
         // Rewrite the "model" field in the request body to match the queue item
         let final_body = rewrite_model_field(&body_bytes, &model_id);
 
-        let url = smart_url_join(&target_url, &stripped_path);
+        let url = crate::smart_url_join(&target_url, &stripped_path);
         let reqwest_method = reqwest::Method::from_bytes(method.as_str().as_bytes())
             .unwrap_or(reqwest::Method::POST);
 
@@ -360,27 +421,12 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
         ));
 
         log::debug!(
-            "[proxy] outbound -> {} | provider={} model={} protocol={:?}",
-            url,
+            "[proxy] << {} model={} proto={:?} -> {}",
             provider_name,
             model_id,
             protocol,
+            url,
         );
-
-        // 请求开始时创建日志条目（is_final=false），显示"请求进行中"
-        let log_id = state.logs.create_request_log(
-            LogLevel::Info,
-            "request",
-            [
-                ("provider", provider_name.clone()),
-                ("model", model_id.clone()),
-            ],
-            Some(provider_name.clone()),
-            Some(model_id.clone()),
-            Some(inbound_headers_map.clone()),
-        );
-
-        let start_time = Instant::now();
         match tokio::time::timeout(UPSTREAM_RESPONSE_TIMEOUT, req_builder.send()).await {
             Err(_) => {
                 let duration_ms = start_time.elapsed().as_millis() as u64;
@@ -482,7 +528,7 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
 
                 // 打印响应头，检查是否有 token 统计
                 for (key, value) in resp.headers().iter() {
-                    log::debug!("[proxy] response header: {} = {:?}", key, value);
+                    log::trace!("[proxy] resp header: {} = {:?}", key, value);
                     if should_forward_response_header(key.as_str()) {
                         builder = builder.header(key.as_str(), value.clone());
                     }
@@ -604,28 +650,6 @@ async fn proxy_handler(State(state): State<ProxyState>, req: Request<Body>) -> R
             }
         }
     }
-}
-
-/// 智能拼接 URL，避免路径重复
-/// 例如：
-/// - base: "https://api.example.com/v1", path: "/v1/chat/completions"
-///   → "https://api.example.com/v1/chat/completions"
-/// - base: "https://api.example.com", path: "/v1/chat/completions"
-///   → "https://api.example.com/v1/chat/completions"
-fn smart_url_join(base: &str, path: &str) -> String {
-    let base_trimmed = base.trim_end_matches('/');
-
-    // 检查 path 的路径部分是否已经在 base 中存在
-    // 例如 base 以 "/v1" 结尾，path 以 "/v1" 开头
-    if let Some(stripped) = path.strip_prefix("/v1") {
-        if base_trimmed.ends_with("/v1") {
-            // 避免重复，去掉 path 的 "/v1" 前缀
-            return format!("{}{}", base_trimmed, stripped);
-        }
-    }
-
-    // 默认直接拼接
-    format!("{}{}", base_trimmed, path)
 }
 
 /// 检测响应是否是流式（SSE）
@@ -788,6 +812,427 @@ fn error_response(status: StatusCode, msg: &str) -> Response<Body> {
         .header("content-type", "application/json")
         .body(Body::from(body))
         .unwrap()
+}
+
+// ============================================================================
+// Anthropic → OpenAI Conversion Handler
+// ============================================================================
+
+/// Map HTTP status codes to Anthropic error types.
+fn status_to_anthropic_error(status: u16) -> &'static str {
+    match status {
+        400 => "invalid_request_error",
+        401 => "authentication_error",
+        403 => "permission_error",
+        404 => "not_found_error",
+        429 => "rate_limit_error",
+        500 | 502 | 503 | 504 => "api_error",
+        _ => "api_error",
+    }
+}
+
+/// Build an Anthropic-formatted error JSON response.
+fn anthropic_error_response(status: StatusCode, error_type: &str, message: &str) -> Response<Body> {
+    let body = serde_json::json!({
+        "type": "error",
+        "error": {
+            "type": error_type,
+            "message": message,
+        }
+    })
+    .to_string();
+    Response::builder()
+        .status(status)
+        .header("content-type", "application/json")
+        .body(Body::from(body))
+        .unwrap()
+}
+
+/// Handle Anthropic → OpenAI conversion for the proxy.
+/// This parses an Anthropic Messages API request, converts it to OpenAI Chat Completions
+/// format, sends it to the upstream provider, and converts the response back.
+async fn handle_anthropic_to_openai(
+    body_bytes: &bytes::Bytes,
+    _original_headers: &HeaderMap,
+    state: &ProxyState,
+    target_url: &str,
+    stripped_path: &str,
+    api_key: &str,
+    provider_name: &str,
+    _provider_id: &str,
+    queue_id: &str,
+    model_id: &str,
+    log_id: u64,
+    start_time: Instant,
+    _inbound_headers_map: &std::collections::BTreeMap<String, String>,
+    retry_delay: u32,
+) -> Response<Body> {
+    // Parse Anthropic request
+    let anthropic_req: transformer::AnthropicMessageRequest = match serde_json::from_slice(body_bytes) {
+        Ok(req) => req,
+        Err(e) => {
+            log::warn!("[convert] failed to parse Anthropic request: {}", e);
+            return anthropic_error_response(
+                StatusCode::BAD_REQUEST,
+                "invalid_request_error",
+                &format!("Failed to parse request: {}", e),
+            );
+        }
+    };
+
+    // Determine the effective model to use.
+    // If respect_requested_model is true (default), use the model from the queue.
+    // If false, run scenario detection to auto-select a model.
+    let (effective_model, scenario_label) = {
+        let r = state.router.read().await;
+        if r.respect_requested_model {
+            (model_id.to_string(), "user_selected".to_string())
+        } else {
+            let scenario = transformer::detect_scenario(&anthropic_req, &r.scenario_routing);
+            let routed = transformer::scenario_to_model(&scenario, &r.scenario_routing);
+            let model = if routed.is_empty() {
+                model_id.to_string()
+            } else {
+                routed
+            };
+            (model, format!("{:?}", scenario))
+        }
+    };
+
+    log::info!(
+        "[convert] model={} -> {} ({})",
+        model_id,
+        effective_model,
+        scenario_label,
+    );
+
+    // Convert to OpenAI request
+    let mut openai_req: transformer::ChatCompletionRequest =
+        match transformer::anthropic_to_openai_request(&anthropic_req, &effective_model) {
+            Ok(req) => req,
+            Err(e) => {
+                log::warn!("[convert] failed to convert request: {}", e);
+                return anthropic_error_response(
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "api_error",
+                    &format!("Conversion error: {}", e),
+                );
+            }
+        };
+
+    // Apply DeepSeek-specific thinking config
+    let has_thinking_history = transformer::has_thinking_blocks(&anthropic_req.messages);
+    openai_req =
+        transformer::apply_deepseek_thinking(openai_req, &effective_model, has_thinking_history);
+
+    // Serialize the converted request
+    let openai_body = match serde_json::to_vec(&openai_req) {
+        Ok(body) => body,
+        Err(e) => {
+            log::warn!("[convert] failed to serialize OpenAI request: {}", e);
+            return anthropic_error_response(
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "api_error",
+                &format!("Serialization error: {}", e),
+            );
+        }
+    };
+
+    // Build the upstream URL: /anthropic/v1/messages → /openai/v1/chat/completions
+    let upstream_path = if stripped_path.starts_with("/v1/messages") {
+        "/v1/chat/completions".to_string()
+    } else {
+        stripped_path.to_string()
+    };
+    let url = crate::smart_url_join(target_url, &upstream_path);
+
+    log::debug!(
+        "[convert] << {} {} -> {}",
+        provider_name,
+        effective_model,
+        url,
+    );
+
+    // Build the request
+    let reqwest_method = reqwest::Method::from_bytes(b"POST").unwrap_or(reqwest::Method::POST);
+    let req_builder = state
+        .http_client
+        .request(reqwest_method, &url)
+        .header("content-type", "application/json")
+        .header("authorization", format!("Bearer {}", api_key))
+        .body(openai_body);
+
+    // Send the request
+    match tokio::time::timeout(UPSTREAM_RESPONSE_TIMEOUT, req_builder.send()).await {
+        Err(_) => {
+            let duration_ms = start_time.elapsed().as_millis() as u64;
+            state.logs.update_request_log(
+                log_id,
+                Some(StatusCode::GATEWAY_TIMEOUT.as_u16()),
+                None,
+                None,
+                Some(duration_ms),
+                None,
+            );
+            anthropic_error_response(
+                StatusCode::GATEWAY_TIMEOUT,
+                "api_error",
+                "upstream request timeout",
+            )
+        }
+        Ok(Ok(resp)) => {
+            let status = resp.status().as_u16();
+
+            if is_retryable_error(status) {
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                state.logs.update_request_log(
+                    log_id,
+                    Some(status),
+                    None,
+                    None,
+                    Some(duration_ms),
+                    None,
+                );
+
+                let failure_action = {
+                    let mut r = state.router.write().await;
+                    r.record_failure_for_queue(queue_id)
+                };
+                match failure_action {
+                    FailureAction::SwitchProvider => {
+                        let next_name = {
+                            let r = state.router.read().await;
+                            r.active_entry_for_queue(queue_id)
+                                .map(|(p, mid)| format!("{} / {}", p.name, mid))
+                                .unwrap_or_default()
+                        };
+                        state.logs.push(
+                            LogLevel::Warn,
+                            "switching provider",
+                            [("next", next_name.clone()), ("status", status.to_string())],
+                        );
+                        let payload = serde_json::json!({
+                            "queue_id": queue_id,
+                            "provider_name": next_name.clone(),
+                        });
+                        let _ = state.notify_tx.send(payload.to_string());
+                        // For retryable errors in conversion path, return error to caller
+                        // The outer loop will retry with the next provider
+                        return anthropic_error_response(
+                            StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            status_to_anthropic_error(status),
+                            &format!("upstream error: {}", status),
+                        );
+                    }
+                    FailureAction::RetryCurrent => {
+                        state.logs.push(
+                            LogLevel::Warn,
+                            "retrying current provider",
+                            [
+                                ("provider", provider_name.to_string()),
+                                ("delay_secs", retry_delay.to_string()),
+                            ],
+                        );
+                        return anthropic_error_response(
+                            StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            status_to_anthropic_error(status),
+                            &format!("upstream error: {}", status),
+                        );
+                    }
+                    FailureAction::Exhausted => {
+                        return anthropic_error_response(
+                            StatusCode::from_u16(status).unwrap_or(StatusCode::INTERNAL_SERVER_ERROR),
+                            status_to_anthropic_error(status),
+                            "all providers exhausted",
+                        );
+                    }
+                }
+            }
+
+            // Check if the original request wanted streaming
+            let is_streaming = anthropic_req.stream;
+
+            if is_streaming {
+                // Streaming response: convert SSE
+                let resp_headers = resp.headers().iter()
+                    .map(|(k, v)| {
+                        (
+                            k.as_str().to_string(),
+                            v.to_str().unwrap_or("[binary]").to_string(),
+                        )
+                    })
+                    .collect::<std::collections::BTreeMap<String, String>>();
+
+                let mut builder = Response::builder()
+                    .status(StatusCode::from_u16(status).unwrap_or(StatusCode::OK))
+                    .header("content-type", "text/event-stream")
+                    .header("cache-control", "no-cache")
+                    .header("connection", "keep-alive");
+
+                // Forward select response headers
+                for (key, value) in resp.headers().iter() {
+                    if should_forward_response_header(key.as_str()) {
+                        builder = builder.header(key.as_str(), value.clone());
+                    }
+                }
+
+                let chunk_stream = resp.bytes_stream();
+                let converted_stream = transformer::proxy_stream(chunk_stream);
+
+                // Create log finalizer
+                let usage_tracker = Arc::new(std::sync::Mutex::new(UsageTracker::default()));
+                let log_finalizer = Arc::new(RequestLogFinalizer {
+                    logs: state.logs.clone(),
+                    log_id,
+                    status: 499,
+                    start_time,
+                    usage_tracker,
+                    response_headers: Some(resp_headers),
+                    completed: Arc::new(AtomicBool::new(false)),
+                });
+
+                let tracked_stream = converted_stream.inspect(move |result| {
+                    if let Ok(chunk) = result {
+                        let chunk_str = String::from_utf8_lossy(chunk);
+                        let mut tracker = log_finalizer.usage_tracker.lock().unwrap();
+                        tracker.parse_sse_chunk(&chunk_str);
+                    }
+                });
+
+                // Note: We can't easily chain the finalizer completion into a raw Bytes stream
+                // without a custom stream wrapper. For now, log at response time.
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+                state.logs.update_request_log(
+                    log_id,
+                    Some(status),
+                    None,
+                    None,
+                    Some(duration_ms),
+                    None,
+                );
+
+                let body = Body::from_stream(tracked_stream);
+                builder.body(body).unwrap_or_else(|_| {
+                    error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "failed to build response",
+                    )
+                })
+            } else {
+                // Non-streaming response: read full body and convert
+                let body_bytes = match resp.bytes().await {
+                    Ok(b) => b,
+                    Err(e) => {
+                        let duration_ms = start_time.elapsed().as_millis() as u64;
+                        state.logs.update_request_log(
+                            log_id,
+                            Some(StatusCode::BAD_GATEWAY.as_u16()),
+                            None,
+                            None,
+                            Some(duration_ms),
+                            None,
+                        );
+                        return anthropic_error_response(
+                            StatusCode::BAD_GATEWAY,
+                            "api_error",
+                            &format!("failed to read upstream response: {}", e),
+                        );
+                    }
+                };
+
+                let duration_ms = start_time.elapsed().as_millis() as u64;
+
+                // Try to parse as OpenAI response
+                let openai_resp: transformer::ChatCompletionResponse =
+                    match serde_json::from_slice(&body_bytes) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            log::warn!("[convert] failed to parse OpenAI response: {}", e);
+                            state.logs.update_request_log(
+                                log_id,
+                                Some(status),
+                                None,
+                                None,
+                                Some(duration_ms),
+                                None,
+                            );
+                            // If we can't parse it, return the raw body as an error
+                            return anthropic_error_response(
+                                StatusCode::from_u16(status).unwrap_or(StatusCode::OK),
+                                "api_error",
+                                &format!("failed to parse upstream response: {}", e),
+                            );
+                        }
+                    };
+
+                // Extract usage for logging
+                let (input_tokens, output_tokens) = openai_resp.usage.as_ref().map(|u| {
+                    (
+                        Some(u.prompt_tokens),
+                        Some(u.completion_tokens),
+                    )
+                }).unwrap_or((None, None));
+
+                state.logs.update_request_log(
+                    log_id,
+                    Some(status),
+                    input_tokens,
+                    output_tokens,
+                    Some(duration_ms),
+                    None,
+                );
+
+                // Convert to Anthropic response
+                let anthropic_resp =
+                    match transformer::openai_to_anthropic_response(&openai_resp) {
+                        Ok(r) => r,
+                        Err(e) => {
+                            log::warn!("[convert] failed to convert response: {}", e);
+                            return anthropic_error_response(
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "api_error",
+                                &format!("conversion error: {}", e),
+                            );
+                        }
+                    };
+
+                match serde_json::to_vec(&anthropic_resp) {
+                    Ok(json_bytes) => Response::builder()
+                        .status(StatusCode::OK)
+                        .header("content-type", "application/json")
+                        .body(Body::from(json_bytes))
+                        .unwrap(),
+                    Err(e) => anthropic_error_response(
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        "api_error",
+                        &format!("failed to serialize response: {}", e),
+                    ),
+                }
+            }
+        }
+        Ok(Err(e)) => {
+            let status = if e.is_timeout() {
+                StatusCode::GATEWAY_TIMEOUT
+            } else {
+                StatusCode::BAD_GATEWAY
+            };
+            let duration_ms = start_time.elapsed().as_millis() as u64;
+            state.logs.update_request_log(
+                log_id,
+                Some(status.as_u16()),
+                None,
+                None,
+                Some(duration_ms),
+                None,
+            );
+            log::warn!("[convert] upstream request error: {}", e);
+            anthropic_error_response(
+                status,
+                "api_error",
+                &format!("upstream request failed: {}", e),
+            )
+        }
+    }
 }
 
 #[cfg(test)]
@@ -966,7 +1411,7 @@ mod tests {
     }
 
     mod smart_url_join {
-        use super::super::smart_url_join;
+        use crate::smart_url_join;
 
         #[test]
         fn avoids_duplicate_v1_prefix() {
