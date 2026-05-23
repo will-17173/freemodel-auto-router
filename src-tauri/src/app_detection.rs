@@ -45,7 +45,7 @@ fn command_version(command_path: &Path) -> Option<String> {
 }
 
 fn path_entries() -> Vec<PathBuf> {
-    let entries: Vec<PathBuf> = env::var_os("PATH")
+    let mut entries: Vec<PathBuf> = env::var_os("PATH")
         .map(|path| env::split_paths(&path).collect())
         .unwrap_or_default();
 
