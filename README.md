@@ -6,6 +6,7 @@ Freemodel Auto Router 是一个 Tauri 桌面应用，会在本机启动 OpenAI /
 
 ## 核心亮点
 
+- **OpenCode Go 订阅转 Claude Code 协议**：通过 Anthropic ↔ OpenAI 请求/响应转换，将 OpenCode Go 等 OpenAI 协议的订阅服务代理为 Claude Code 兼容的 Anthropic 协议，让你可以直接在 Claude Code 中使用 OpenCode Go 的模型。
 - 使用你指定的模型：不同服务商提供了多个免费模型，大部分情况下，我们只想使用优秀的模型，这个应用可以把不同服务商的模型聚合到一个队列里，只使用你选择的模型。
 - 额度耗尽自动路由：当一个模型触发限流、额度耗尽或上游故障时，代理会按队列自动重试并切换到下一个可用模型，而不需要你手动干预。
 
@@ -15,7 +16,8 @@ Freemodel Auto Router 是一个 Tauri 桌面应用，会在本机启动 OpenAI /
 
 ## 主要功能
 
-- 多供应商路由：内置 OpenRouter、ModelScope、LongCat、SiliconFlow、SenseNova、Vercel AI Gateway 等供应商，并支持添加自定义供应商，便于筛选和组合更值得使用的免费模型。
+- **Anthropic ↔ OpenAI 协议转换**：支持将 Anthropic Messages API 请求转换为 OpenAI Chat Completions 格式，并将响应转换回 Anthropic 格式，实现跨协议代理（如 OpenCode Go 订阅转 Claude Code 协议）。
+- 多供应商路由：内置 OpenRouter、ModelScope、LongCat、SiliconFlow、SenseNova、Vercel AI Gateway、OpenCode Go 等供应商，并支持添加自定义供应商，便于筛选和组合更值得使用的免费模型。
 - 多队列管理：可以创建多个模型队列，拖拽调整优先级，设置默认队列。
 - 自动重试和切换：遇到 `429`、`500`、`502`、`503`、`504` 或上游请求错误时，先按配置重试，超过次数后切到队列里的下一个可用模型。
 - OpenAI / Anthropic 双协议：供应商可分别配置 `openai_url` 和 `anthropic_url`，代理会根据访问前缀选择上游端点。
@@ -58,6 +60,8 @@ sudo xattr -dr com.apple.quarantine "/Applications/Freemodel Auto Router.app"
 | Hermes      | 可用                  | 修改 `~/.hermes/config.yaml` 的模型和 `custom_providers` 配置 | `/openai`    |
 | OpenClaw    | 可用                  | 修改 `~/.openclaw/openclaw.json` 的 providers 配置            | `/openai`    |
 | Codex       | 后端已实现，UI 暂禁用 | 修改 `~/.codex/auth.json` 和 `config.toml`                    | `/openai`    |
+
+> **OpenCode Go 使用方式**：在 Claude Code 中配置代理地址 `http://127.0.0.1:7860/anthropic`，队列中添加 OpenCode Go 供应商和模型，即可通过 OpenCode Go 订阅使用 Claude Code。代理会自动完成 Anthropic ↔ OpenAI 协议转换。
 
 Claude Code 关闭注入时会恢复备份配置。应用正常退出时也会尝试清理 Claude Code 代理配置。
 
@@ -123,6 +127,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 | UI             | Radix UI、shadcn 风格组件、lucide-react            |
 | 拖拽排序       | `@dnd-kit/core`、`@dnd-kit/sortable`               |
 | 后端 HTTP      | axum 0.7、reqwest 0.12、hyper 1                    |
+| 协议转换       | Anthropic Messages API ↔ OpenAI Chat Completions   |
 | 异步运行时     | tokio                                              |
 | 通知和打开链接 | `tauri-plugin-notification`、`tauri-plugin-opener` |
 
