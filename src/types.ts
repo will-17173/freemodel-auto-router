@@ -59,11 +59,23 @@ export interface QueueStateInfo {
   items: QueueItem[];
 }
 
+export interface ScenarioRoutingConfig {
+  long_context_model: string;
+  complex_model: string;
+  think_model: string;
+  background_model: string;
+  default_model: string;
+  fast_model: string;
+  long_context_threshold: number;
+}
+
 export interface AppConfig {
   retry: RetryConfig;
   queues: Record<string, Queue>;
   app_mapping: AppMapping[];
   default_queue_id: string;
+  scenario_routing: ScenarioRoutingConfig;
+  respect_requested_model: boolean;
   queue: QueueItem[];
   port: number;
 }

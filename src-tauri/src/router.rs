@@ -66,6 +66,8 @@ pub struct RouterState {
     pub auth_map: HashMap<String, String>,
     pub app_mapping: Vec<AppMapping>,
     pub default_queue_id: String,
+    pub scenario_routing: crate::config::ScenarioRoutingConfig,
+    pub respect_requested_model: bool,
 }
 
 impl RouterState {
@@ -83,6 +85,8 @@ impl RouterState {
             auth_map: HashMap::new(),
             app_mapping: cfg.app_mapping.clone(),
             default_queue_id: cfg.default_queue_id.clone(),
+            scenario_routing: cfg.scenario_routing.clone(),
+            respect_requested_model: cfg.respect_requested_model,
         }
     }
 
@@ -103,6 +107,8 @@ impl RouterState {
             auth_map: auth,
             app_mapping: cfg.app_mapping.clone(),
             default_queue_id: cfg.default_queue_id.clone(),
+            scenario_routing: cfg.scenario_routing.clone(),
+            respect_requested_model: cfg.respect_requested_model,
         }
     }
 
@@ -116,6 +122,8 @@ impl RouterState {
         self.retry = cfg.retry.clone();
         self.app_mapping = cfg.app_mapping.clone();
         self.default_queue_id = cfg.default_queue_id.clone();
+        self.scenario_routing = cfg.scenario_routing.clone();
+        self.respect_requested_model = cfg.respect_requested_model;
         // auth_map stays unchanged
     }
 
@@ -325,6 +333,8 @@ mod tests {
             queues,
             app_mapping,
             default_queue_id: "default".to_string(),
+            scenario_routing: crate::config::ScenarioRoutingConfig::default(),
+            respect_requested_model: true,
             queue: vec![],
             port: 7860,
         }
