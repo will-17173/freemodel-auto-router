@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-05-24
+
+### Fixed
+
+- 支持 tool_result 内容字段为数组格式 — Anthropic API 允许 content 为字符串或内容块数组，之前只处理字符串导致反序列化失败
+- 修正 `providers.rs` 中 `startsWith` 为 Rust 标准的 `starts_with` 方法名
+
+### Changed
+
+- 更新应用图标资源（icns）
+
 ## [0.2.0] - 2026-05-23
 
 ### Added
