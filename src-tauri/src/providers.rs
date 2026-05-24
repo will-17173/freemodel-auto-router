@@ -369,7 +369,7 @@ mod tests {
             assert!(provider
                 .get("link")
                 .and_then(|v| v.as_str())
-                .is_some_and(|link| link.startsWith("https://")));
+                .is_some_and(|link| link.starts_with("https://")));
 
             let models = provider["models"]
                 .as_array()

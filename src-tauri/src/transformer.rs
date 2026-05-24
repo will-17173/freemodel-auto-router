@@ -63,6 +63,45 @@ pub enum AnthropicMessageContent {
     Blocks(Vec<AnthropicContentBlock>),
 }
 
+/// Content field for tool_result blocks.
+/// The Anthropic API allows this to be either a plain string or an array of content blocks.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ToolResultContent {
+    String(String),
+    Blocks(Vec<ToolResultContentBlock>),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ToolResultContentBlock {
+    #[serde(rename = "type")]
+    pub block_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<serde_json::Value>,
+}
+
+impl ToolResultContent {
+    /// Flatten the content into a single string by extracting text from blocks.
+    pub fn to_string(&self) -> String {
+        match self {
+            ToolResultContent::String(s) => s.clone(),
+            ToolResultContent::Blocks(blocks) => blocks
+                .iter()
+                .filter_map(|b| {
+                    if b.block_type == "text" {
+                        b.text.clone()
+                    } else {
+                        None
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnthropicContentBlock {
     #[serde(rename = "type")]
@@ -78,7 +117,7 @@ pub struct AnthropicContentBlock {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub tool_use_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub content: Option<String>,
+    pub content: Option<ToolResultContent>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thinking: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -435,7 +474,11 @@ pub fn anthropic_to_openai_request(
                     // Each tool_result becomes a separate "tool" message
                     for block in blocks {
                         if block.block_type == "tool_result" {
-                            let content = block.content.clone().unwrap_or_default();
+                            let content = block
+                                .content
+                                .as_ref()
+                                .map(|c| c.to_string())
+                                .unwrap_or_default();
                             messages.push(ChatMessage {
                                 role: "tool".to_string(),
                                 content: Some(ChatMessageContent::String(content)),
@@ -1334,6 +1377,37 @@ mod tests {
         assert_eq!(
             msg.content,
             Some(ChatMessageContent::String("file contents here".to_string()))
+        );
+    }
+
+    #[test]
+    fn test_request_conversion_tool_result_array_content() {
+        // Regression test: tool_result content can be an array of content blocks
+        // (Anthropic API spec allows both string and array formats).
+        // Previously this caused: "data did not match any variant of untagged enum AnthropicMessageContent"
+        let json = r#"{
+            "model": "claude-sonnet-4-6",
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "tool_result", "tool_use_id": "tool_1", "content": [
+                        {"type": "text", "text": "line 1"},
+                        {"type": "text", "text": "line 2"}
+                    ]}
+                ]
+            }],
+            "max_tokens": 4096
+        }"#;
+        let req: AnthropicMessageRequest = serde_json::from_str(json).unwrap();
+        let openai_req = anthropic_to_openai_request(&req, "kimi-k2.6").unwrap();
+        assert_eq!(openai_req.messages.len(), 1);
+        let msg = &openai_req.messages[0];
+        assert_eq!(msg.role, "tool");
+        assert_eq!(msg.tool_call_id.as_deref(), Some("tool_1"));
+        // Array content blocks should be flattened to a single string
+        assert_eq!(
+            msg.content,
+            Some(ChatMessageContent::String("line 1\nline 2".to_string()))
         );
     }
 
