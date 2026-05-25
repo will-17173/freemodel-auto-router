@@ -1,7 +1,5 @@
 import { useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 
 export interface AddProviderPayload {
   name: string
@@ -73,20 +71,33 @@ export function AddProviderModal({ onSave, onClose }: Props) {
     if (e.key === "Escape") onClose()
   }
 
+  const fieldStyle = {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: "6px",
+  }
+
+  const labelStyle = {
+    fontSize: "var(--fm-text-xs)",
+    color: "var(--fm-text-3)",
+    fontWeight: "var(--fm-weight-medium)",
+  }
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[440px]">
         <DialogHeader>
-          <DialogTitle>添加服务商</DialogTitle>
-          <DialogDescription>
+          <DialogTitle className="fm-text-zh">添加服务商</DialogTitle>
+          <DialogDescription className="fm-text-zh">
             配置 Anthropic 和 OpenAI 双协议 URL，或勾选单一地址兼容模式。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">服务商名</label>
-            <Input
+        <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+          <div style={fieldStyle}>
+            <label className="fm-text-zh" style={labelStyle}>服务商名</label>
+            <input
+              className="fm-input"
               value={name}
               onChange={(e) => { setName(e.target.value); setError("") }}
               onKeyDown={handleKeyDown}
@@ -95,84 +106,90 @@ export function AddProviderModal({ onSave, onClose }: Props) {
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">API Key</label>
-            <Input
+          <div style={fieldStyle}>
+            <label className="fm-text-tech" style={labelStyle}>API Key</label>
+            <input
               type="password"
+              className="fm-input fm-text-tech"
               value={apiKey}
               onChange={(e) => { setApiKey(e.target.value); setError("") }}
               onKeyDown={handleKeyDown}
-              placeholder=""
-              className="font-mono text-xs"
+              placeholder="sk-..."
             />
           </div>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">服务商网站</label>
-            <Input
+          <div style={fieldStyle}>
+            <label className="fm-text-zh" style={labelStyle}>服务商网站</label>
+            <input
+              className="fm-input fm-text-tech"
               value={link}
               onChange={(e) => { setLink(e.target.value); setError("") }}
               onKeyDown={handleKeyDown}
               placeholder="https://example.com"
-              className="font-mono text-xs"
             />
           </div>
 
-          <label className="flex items-center gap-2 cursor-pointer text-sm">
+          <label className="flex items-center gap-2 cursor-pointer">
             <input
               type="checkbox"
               checked={dualProtocol}
               onChange={(e) => { setDualProtocol(e.target.checked); setError("") }}
-              className="h-4 w-4"
+              className="h-4 w-4 rounded"
+              style={{ accentColor: "var(--fm-primary)" }}
             />
-            双协议兼容（使用同一地址同时支持 Anthropic 和 OpenAI 协议）
+            <span className="fm-text-zh" style={{ fontSize: "var(--fm-text-sm)", color: "var(--fm-text-2)" }}>
+              双协议兼容（使用同一地址同时支持 Anthropic 和 OpenAI 协议）
+            </span>
           </label>
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Anthropic URL</label>
-            <Input
+          <div style={fieldStyle}>
+            <label className="fm-text-tech" style={labelStyle}>Anthropic URL</label>
+            <input
+              className="fm-input fm-text-tech"
               value={anthropicUrl}
               onChange={(e) => { setAnthropicUrl(e.target.value); setError("") }}
               onKeyDown={handleKeyDown}
               placeholder="https://api.example.com"
-              className="font-mono text-xs"
             />
           </div>
 
           {!dualProtocol && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">OpenAI URL</label>
-              <Input
+            <div style={fieldStyle}>
+              <label className="fm-text-tech" style={labelStyle}>OpenAI URL</label>
+              <input
+                className="fm-input fm-text-tech"
                 value={openaiUrl}
                 onChange={(e) => { setOpenaiUrl(e.target.value); setError("") }}
                 onKeyDown={handleKeyDown}
                 placeholder="https://api.example.com/openai"
-                className="font-mono text-xs"
               />
             </div>
           )}
 
-          <div className="space-y-2">
-            <label className="text-sm font-medium">模型列表</label>
+          <div style={fieldStyle}>
+            <label className="fm-text-zh" style={labelStyle}>模型列表</label>
             <textarea
               value={models}
               onChange={(e) => { setModels(e.target.value); setError("") }}
               onKeyDown={handleKeyDown}
               placeholder={"claude-sonnet-4-6\nglm-5.1"}
               rows={4}
-              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y min-h-[104px] font-mono"
+              className="fm-input fm-text-tech resize-y"
+              style={{ minHeight: "96px", fontFamily: "var(--fm-font-mono)" }}
             />
-            <p className="text-xs text-muted-foreground">
+            <p className="fm-text-zh" style={{ fontSize: "var(--fm-text-xs)", color: "var(--fm-text-4)" }}>
               一行一个模型，填写模型 ID
             </p>
           </div>
         </div>
 
         <DialogFooter className="flex-row items-center justify-between sm:justify-between">
-          <span className="text-xs text-muted-foreground">
-            {error ? <span className="text-destructive">{error}</span> : `将添加 ${modelIds.length} 个模型`}
+          <span style={{ fontSize: "var(--fm-text-xs)", color: error ? "var(--fm-error-text)" : "var(--fm-text-4)" }} className="fm-text-zh">
+            {error || `将添加 ${modelIds.length} 个模型`}
           </span>
-          <Button onClick={handleSave}>添加</Button>
+          <button className="fm-btn-primary" onClick={handleSave}>
+            <span className="fm-text-zh">添加</span>
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

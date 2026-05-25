@@ -23,8 +23,12 @@ import { ToastProvider, useToast } from "./components/ui/toast";
 import { dedupeQueueItems } from "./lib/queue";
 import { ONBOARDING_SEEN_VALUE, shouldShowOnboarding } from "./lib/onboarding";
 import { trackEvent } from "./lib/analytics";
+import { initTheme, getTheme as getStoredTheme, setTheme as applyTheme, type ThemeMode } from "./lib/theme";
 import type { AppConfig, Provider, QueueStateInfo, ProviderSwitchedPayload, DraftItem, AppInstallations } from "./types";
 import "./App.css";
+
+// Init theme immediately (before first render)
+initTheme();
 
 function slugifyProviderName(name: string) {
   const slug = name
@@ -66,6 +70,7 @@ function AppContent() {
   });
   const [queueStates, setQueueStates] = useState<Record<string, QueueStateInfo>>({});
   const [appInstallations, setAppInstallations] = useState<AppInstallations | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(getStoredTheme);
 
   // Edit panel state
   const [editPanelMode, setEditPanelMode] = useState<"new" | "edit" | null>(null);
@@ -536,6 +541,9 @@ function AppContent() {
             appStates={appStates}
             appInstallations={appInstallations}
             onAppToggle={handleAppToggle}
+            config={config}
+            providers={providers}
+            queueStates={queueStates}
           />
 
           {/* Page content */}
@@ -579,6 +587,11 @@ function AppContent() {
             <SettingsPage
               retry={config.retry}
               port={config.port}
+              themeMode={themeMode}
+              onThemeChange={(mode) => {
+                setThemeMode(mode);
+                applyTheme(mode);
+              }}
               onSave={(retry, newPort, portChanged) => {
                 const next = { ...config, retry, port: newPort };
                 updateAndSave(next);

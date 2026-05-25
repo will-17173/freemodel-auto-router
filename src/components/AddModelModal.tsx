@@ -1,6 +1,5 @@
 import { useState, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
 
 interface Props {
   providerName: string
@@ -50,12 +49,12 @@ export function AddModelModal({ providerName, existingModelIds, onSave, onClose 
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent className="max-w-[420px]">
         <DialogHeader>
-          <DialogTitle>添加模型</DialogTitle>
-          <DialogDescription>{providerName}</DialogDescription>
+          <DialogTitle className="fm-text-zh">添加模型</DialogTitle>
+          <DialogDescription className="fm-text-zh">{providerName}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-2">
-          <label className="text-sm font-medium">模型列表</label>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+          <label className="fm-text-zh" style={{ fontSize: "var(--fm-text-xs)", color: "var(--fm-text-3)", fontWeight: "var(--fm-weight-medium)" }}>模型列表</label>
           <textarea
             value={models}
             onChange={(e) => { setModels(e.target.value); setError("") }}
@@ -63,18 +62,21 @@ export function AddModelModal({ providerName, existingModelIds, onSave, onClose 
             placeholder={"claude-sonnet-4-6"}
             rows={4}
             autoFocus
-            className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring resize-y min-h-[104px] font-mono"
+            className="fm-input fm-text-tech resize-y"
+            style={{ minHeight: "96px", fontFamily: "var(--fm-font-mono)" }}
           />
-          <p className="text-xs text-muted-foreground">
+          <p className="fm-text-zh" style={{ fontSize: "var(--fm-text-xs)", color: "var(--fm-text-4)" }}>
             一行一个模型，填写模型 ID
           </p>
         </div>
 
         <DialogFooter className="flex-row items-center justify-between sm:justify-between">
-          <span className="text-xs text-muted-foreground">
-            {error ? <span className="text-destructive">{error}</span> : `将添加 ${parsedIds.length} 个模型`}
+          <span className="fm-text-zh" style={{ fontSize: "var(--fm-text-xs)", color: error ? "var(--fm-error-text)" : "var(--fm-text-4)" }}>
+            {error || `将添加 ${parsedIds.length} 个模型`}
           </span>
-          <Button onClick={handleSave}>添加</Button>
+          <button className="fm-btn-primary" onClick={handleSave}>
+            <span className="fm-text-zh">添加</span>
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

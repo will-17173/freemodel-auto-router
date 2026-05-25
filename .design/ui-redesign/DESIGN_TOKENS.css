@@ -1,0 +1,524 @@
+/* =====================================================================
+ * freemodel-auto-router · Design Tokens · UI Redesign
+ * ---------------------------------------------------------------------
+ * Philosophy : Linear / Vercel 极简派 + 暗色开发者控制台
+ * Brand      : 单点亮绿 #00a854 作为信号灯（active / focus / route）
+ * Typography : Geist Sans + Geist Mono + NotoSansSC
+ * Mode       : 暗色为主场，浅色作为可选
+ *
+ * 用法：
+ *   1. 这是 token 真相源，所有组件 CSS 都通过 var(--fm-*) 引用。
+ *   2. 默认应用 [data-theme="dark"] 或 :root（暗色为主场）。
+ *   3. [data-theme="light"] 切换浅色。
+ *   4. 不显式设置 data-theme 时跟随 prefers-color-scheme。
+ *
+ * 本文件由 /design-flow Phase 4 生成于 2026-05-25。
+ * ===================================================================== */
+
+
+/* ---------------------------------------------------------------------
+ * 0. Font faces
+ * ------------------------------------------------------------------- */
+
+@font-face {
+  font-family: "Geist";
+  src: local("Geist"), url("/fonts/Geist-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "GeistMono";
+  src: local("Geist Mono"), url("/fonts/GeistMono-Variable.woff2") format("woff2-variations");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* NotoSansSC 已在项目里通过 src/assets/fonts 嵌入，保留沿用 */
+
+
+/* =====================================================================
+ * 1. ROOT — 暗色为主场（默认）
+ *    没有 [data-theme] 时即此值
+ * ===================================================================== */
+
+:root {
+
+  /* ─── 字体 ──────────────────────────────────────────────────────── */
+  --fm-font-sans:    "Geist", "NotoSansSC", -apple-system, BlinkMacSystemFont, sans-serif;
+  --fm-font-mono:    "GeistMono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --fm-font-zh:      "NotoSansSC", "Geist", sans-serif;
+  /* 用于纯西文 / 数字 / 技术字符串 */
+  --fm-font-tech:    "GeistMono", ui-monospace, monospace;
+
+
+  /* ─── 字号 ──────────────────────────────────────────────────────── */
+  /* 西文偏小（Linear 密度），中文场景请用 fm-text-zh-* 类，最小 14px */
+  --fm-text-2xs:     10px;   /* 微小标签：徽章脚注、状态码尾巴 */
+  --fm-text-xs:      11px;   /* mono caption / 时间戳 / shortcut hint */
+  --fm-text-sm:      12px;   /* 副文字 / 表单 hint */
+  --fm-text-base:    13px;   /* 西文 body 默认 */
+  --fm-text-md:      14px;   /* 中文 body 最小（红线）/ 西文 body 加大 */
+  --fm-text-lg:      16px;   /* 卡片标题 / 重要 body */
+  --fm-text-xl:      18px;   /* 页面区块标题 */
+  --fm-text-2xl:     22px;   /* 页面主标题 */
+  --fm-text-3xl:     28px;   /* hero / onboarding 标题 */
+
+
+  /* ─── 字重 ──────────────────────────────────────────────────────── */
+  --fm-weight-regular:   400;
+  --fm-weight-medium:    500;
+  --fm-weight-semibold:  600;
+  --fm-weight-bold:      700;
+
+
+  /* ─── 行高 ──────────────────────────────────────────────────────── */
+  --fm-leading-tight:    1.2;     /* heading */
+  --fm-leading-snug:     1.35;    /* dense body / list */
+  --fm-leading-normal:   1.5;     /* prose */
+
+
+  /* ─── 字距 ──────────────────────────────────────────────────────── */
+  --fm-tracking-tight:   -0.01em;  /* 西文标题 */
+  --fm-tracking-normal:   0;
+  --fm-tracking-wide:    0.04em;   /* 全大写小标签 */
+
+
+  /* ─── 间距 ── 4px 基线 ──────────────────────────────────────────── */
+  --fm-space-0:    0;
+  --fm-space-1:    2px;
+  --fm-space-2:    4px;
+  --fm-space-3:    6px;
+  --fm-space-4:    8px;
+  --fm-space-5:   12px;
+  --fm-space-6:   16px;
+  --fm-space-7:   20px;
+  --fm-space-8:   24px;
+  --fm-space-9:   32px;
+  --fm-space-10:  40px;
+  --fm-space-11:  56px;
+  --fm-space-12:  72px;
+
+
+  /* ─── 圆角 ── Linear 密度 ────────────────────────────────────────── */
+  --fm-r-xs:    3px;     /* 细节小元素：dots / mini badge */
+  --fm-r-sm:    4px;     /* 按钮 / 输入框 */
+  --fm-r-md:    6px;     /* 普通卡片 */
+  --fm-r-lg:    8px;     /* 大卡片 / Provider 卡 */
+  --fm-r-xl:   12px;     /* Modal / 主面板 */
+  --fm-r-pill: 999px;    /* 仅用于 chip / model pill / status badge */
+
+
+  /* ─── 边框宽度 ──────────────────────────────────────────────────── */
+  --fm-border-width-thin:    1px;
+  --fm-border-width-medium:  1.5px;
+  --fm-border-width-thick:   2px;
+
+
+  /* ─── 阴影 ── 暗色环境下基本不用，仅在浮层用极弱阴影 ──────────── */
+  /* 暗色模式 */
+  --fm-shadow-none:   none;
+  --fm-shadow-xs:     0 1px 2px rgba(0, 0, 0, 0.4);
+  --fm-shadow-sm:     0 2px 6px rgba(0, 0, 0, 0.45);
+  --fm-shadow-md:     0 6px 16px rgba(0, 0, 0, 0.5);
+  --fm-shadow-lg:    0 12px 32px rgba(0, 0, 0, 0.55);
+  --fm-shadow-focus:  0 0 0 2px var(--fm-primary-ring);
+
+
+  /* ─── 动效 ──────────────────────────────────────────────────────── */
+  --fm-dur-instant:  60ms;
+  --fm-dur-fast:    120ms;
+  --fm-dur-normal:  200ms;
+  --fm-dur-slow:    320ms;
+  --fm-dur-slower:  500ms;
+
+  --fm-ease-default:  cubic-bezier(0.4, 0, 0.2, 1);     /* 标准 */
+  --fm-ease-in:       cubic-bezier(0.4, 0, 1, 1);
+  --fm-ease-out:      cubic-bezier(0, 0, 0.2, 1);
+  --fm-ease-emphasis: cubic-bezier(0.2, 0.8, 0.2, 1);   /* 路由接力跳用 */
+  --fm-ease-flow:     cubic-bezier(0.65, 0, 0.35, 1);   /* 路由流动光点 */
+
+
+  /* ─── 断点 ──────────────────────────────────────────────────────── */
+  --fm-bp-sm:   1024px;   /* Tauri 最小窗口 */
+  --fm-bp-md:   1280px;   /* 默认目标 */
+  --fm-bp-lg:   1440px;
+  --fm-bp-xl:   1920px;
+
+
+  /* =================================================================
+   * COLOR · 暗色 ── 主场默认
+   * ================================================================= */
+
+  /* ─── 底盘层级 ── 4 层 ────────────────────────────────────────── */
+  /* 命名遵循 "高度感"：越深 = 越底层；越浅 = 越前层 */
+  --fm-bg-canvas:      #0A0B0D;   /* 应用画布 */
+  --fm-bg-surface:     #111316;   /* 主面板（Sidebar / TopBar / 主内容区底） */
+  --fm-bg-elevated:    #15171B;   /* 卡片 / Modal */
+  --fm-bg-hover:       #1A1D22;   /* hover 状态 */
+  --fm-bg-active:      #1E2127;   /* 活跃 / 选中 */
+  --fm-bg-overlay:     rgba(0, 0, 0, 0.55);  /* Modal 遮罩 */
+
+  /* 输入区域单独一档（视觉上要暗于卡片以表达"凹陷"） */
+  --fm-bg-input:       #0E1014;
+  --fm-bg-input-hover: #12141A;
+
+
+  /* ─── 边框 ── 暗色边框非常细微 ───────────────────────────────── */
+  --fm-border-subtle:  #1A1D22;   /* 几乎不可见，仅用于内部分隔 */
+  --fm-border-default: #22262C;   /* 默认边框 */
+  --fm-border-strong:  #2D3239;   /* 强调边框 / hover 状态 */
+  --fm-border-emphasis:#3A4049;   /* 极强调 / 焦点附近 */
+
+
+  /* ─── 文本 ── 4 级层级 ──────────────────────────────────────── */
+  --fm-text-1:    #F4F5F6;   /* 主文字 */
+  --fm-text-2:    #B8BCC2;   /* 次要文字 */
+  --fm-text-3:    #8B8E96;   /* 辅助文字 / caption */
+  --fm-text-4:    #5A5E66;   /* 失效 / placeholder */
+  --fm-text-disabled: #4D5057;
+  --fm-text-inverse:  #0A0B0D;  /* 在主色或浅色块上的字 */
+
+
+  /* ─── 主色 ── #00a854 信号灯 ─────────────────────────────────── */
+  /* 暗色环境下绿色需要稍微提亮以保持识别度 */
+  --fm-primary:        #00C760;   /* 暗色版略亮 → 视觉上仍是 freemodel 的绿 */
+  --fm-primary-hover:  #14D870;
+  --fm-primary-active: #00B055;
+  --fm-primary-subtle: rgba(0, 199, 96, 0.14);   /* 背景态 */
+  --fm-primary-ghost:  rgba(0, 199, 96, 0.08);   /* 极淡背景 */
+  --fm-primary-border: rgba(0, 199, 96, 0.36);
+  --fm-primary-ring:   rgba(0, 199, 96, 0.30);   /* focus ring */
+  --fm-primary-glow:   rgba(0, 199, 96, 0.18);   /* 路由动画光晕 */
+  --fm-primary-text:   #14D870;                   /* 在暗底上的文字态绿色 */
+
+
+  /* ─── 语义色 ── 暗色版 ────────────────────────────────────────── */
+  --fm-success:        #00C760;
+  --fm-success-subtle: rgba(0, 199, 96, 0.14);
+  --fm-success-text:   #14D870;
+  --fm-success-border: rgba(0, 199, 96, 0.36);
+
+  --fm-warning:        #FBBF24;
+  --fm-warning-subtle: rgba(251, 191, 36, 0.14);
+  --fm-warning-text:   #FCD34D;
+  --fm-warning-border: rgba(251, 191, 36, 0.36);
+
+  --fm-error:          #F87171;
+  --fm-error-subtle:   rgba(248, 113, 113, 0.14);
+  --fm-error-text:     #FCA5A5;
+  --fm-error-border:   rgba(248, 113, 113, 0.36);
+
+  --fm-info:           #60A5FA;
+  --fm-info-subtle:    rgba(96, 165, 250, 0.14);
+  --fm-info-text:      #93C5FD;
+  --fm-info-border:    rgba(96, 165, 250, 0.36);
+
+
+  /* ─── 色块 ── 从 9 种精简到 3 种 ──────────────────────────────── */
+  /* 用于状态色块差异化场景（如不同队列的视觉区分） */
+  --fm-block-mint:   rgba(0, 199, 96, 0.08);    /* 主色系 */
+  --fm-block-lilac:  rgba(167, 139, 250, 0.10);  /* 冷色对比 */
+  --fm-block-coral:  rgba(251, 146, 100, 0.10);  /* 暖色对比 */
+
+
+  /* ─── 路由可视化专用 token ──────────────────────────────────── */
+  --fm-route-line-active:  var(--fm-primary);
+  --fm-route-line-queued:  var(--fm-text-4);
+  --fm-route-line-spent:   var(--fm-text-4);
+  --fm-route-glow:         var(--fm-primary-glow);
+  --fm-route-node-active-bg:  rgba(0, 199, 96, 0.12);
+  --fm-route-node-queued-bg:  transparent;
+  --fm-route-node-border-active: var(--fm-primary);
+  --fm-route-node-border-queued: var(--fm-border-default);
+
+
+  /* ─── shadcn/ui 兼容映射 ──────────────────────────────────────── */
+  /* shadcn 组件库需要这些变量名以保持兼容 */
+  --background:         var(--fm-bg-canvas);
+  --foreground:         var(--fm-text-1);
+  --card:               var(--fm-bg-elevated);
+  --card-foreground:    var(--fm-text-1);
+  --popover:            var(--fm-bg-elevated);
+  --popover-foreground: var(--fm-text-1);
+  --primary:            var(--fm-primary);
+  --primary-foreground: var(--fm-text-inverse);
+  --secondary:          var(--fm-bg-hover);
+  --secondary-foreground:var(--fm-text-1);
+  --muted:              var(--fm-bg-hover);
+  --muted-foreground:   var(--fm-text-3);
+  --accent:             var(--fm-bg-active);
+  --accent-foreground:  var(--fm-text-1);
+  --destructive:        var(--fm-error);
+  --destructive-foreground:#FFFFFF;
+  --border:             var(--fm-border-default);
+  --input:              var(--fm-border-default);
+  --ring:               var(--fm-primary);
+  --radius:             var(--fm-r-md);
+
+  --sidebar:                    var(--fm-bg-surface);
+  --sidebar-foreground:         var(--fm-text-2);
+  --sidebar-primary:            var(--fm-primary);
+  --sidebar-primary-foreground: var(--fm-text-inverse);
+  --sidebar-accent:             var(--fm-bg-hover);
+  --sidebar-accent-foreground:  var(--fm-text-1);
+  --sidebar-border:             var(--fm-border-subtle);
+  --sidebar-ring:               var(--fm-primary);
+
+  /* 图表色（暗色） */
+  --chart-1: #00C760;
+  --chart-2: #60A5FA;
+  --chart-3: #FBBF24;
+  --chart-4: #F87171;
+  --chart-5: #A78BFA;
+}
+
+
+/* =====================================================================
+ * 2. LIGHT MODE — 用户手动切换 OR 系统偏好浅色（且无强制 dark）
+ * ===================================================================== */
+
+[data-theme="light"] {
+
+  /* 浅色阴影需要可见 */
+  --fm-shadow-xs:    0 1px 2px rgba(15, 20, 25, 0.05);
+  --fm-shadow-sm:    0 1px 2px rgba(15, 20, 25, 0.04), 0 2px 6px rgba(15, 20, 25, 0.06);
+  --fm-shadow-md:    0 2px 4px rgba(15, 20, 25, 0.04), 0 8px 20px rgba(15, 20, 25, 0.08);
+  --fm-shadow-lg:    0 4px 8px rgba(15, 20, 25, 0.06), 0 20px 40px rgba(15, 20, 25, 0.10);
+
+
+  /* ─── 底盘 ── 浅色仍走 Linear 而非苹果浅米绿 ────────────────── */
+  --fm-bg-canvas:      #FAFAFA;
+  --fm-bg-surface:     #FFFFFF;
+  --fm-bg-elevated:    #FFFFFF;
+  --fm-bg-hover:       #F4F5F6;
+  --fm-bg-active:      #ECEEF0;
+  --fm-bg-overlay:     rgba(15, 20, 25, 0.40);
+
+  --fm-bg-input:       #FFFFFF;
+  --fm-bg-input-hover: #FAFAFA;
+
+
+  /* ─── 边框 ─────────────────────────────────────────────────────── */
+  --fm-border-subtle:   #F0F1F2;
+  --fm-border-default:  #E4E6E9;
+  --fm-border-strong:   #D0D3D8;
+  --fm-border-emphasis: #B8BCC2;
+
+
+  /* ─── 文本 ─────────────────────────────────────────────────────── */
+  --fm-text-1:    #0E1014;
+  --fm-text-2:    #3A4049;
+  --fm-text-3:    #6B7079;
+  --fm-text-4:    #9CA1A8;
+  --fm-text-disabled: #BCC0C5;
+  --fm-text-inverse:  #FFFFFF;
+
+
+  /* ─── 主色 ── 浅色版用更深的 #00a854 保持对比度 ──────────────── */
+  --fm-primary:        #00A854;
+  --fm-primary-hover:  #009649;
+  --fm-primary-active: #00843F;
+  --fm-primary-subtle: rgba(0, 168, 84, 0.08);
+  --fm-primary-ghost:  rgba(0, 168, 84, 0.04);
+  --fm-primary-border: rgba(0, 168, 84, 0.30);
+  --fm-primary-ring:   rgba(0, 168, 84, 0.20);
+  --fm-primary-glow:   rgba(0, 168, 84, 0.14);
+  --fm-primary-text:   #00843F;
+
+
+  /* ─── 语义色 ── 浅色版 ───────────────────────────────────────── */
+  --fm-success:        #00A854;
+  --fm-success-subtle: rgba(0, 168, 84, 0.08);
+  --fm-success-text:   #00843F;
+  --fm-success-border: rgba(0, 168, 84, 0.30);
+
+  --fm-warning:        #F59E0B;
+  --fm-warning-subtle: rgba(245, 158, 11, 0.10);
+  --fm-warning-text:   #B45309;
+  --fm-warning-border: rgba(245, 158, 11, 0.30);
+
+  --fm-error:          #EF4444;
+  --fm-error-subtle:   rgba(239, 68, 68, 0.08);
+  --fm-error-text:     #B91C1C;
+  --fm-error-border:   rgba(239, 68, 68, 0.30);
+
+  --fm-info:           #0EA5E9;
+  --fm-info-subtle:    rgba(14, 165, 233, 0.08);
+  --fm-info-text:      #0369A1;
+  --fm-info-border:    rgba(14, 165, 233, 0.30);
+
+
+  /* ─── 色块 ── 浅色版 ─────────────────────────────────────────── */
+  --fm-block-mint:   #ECFDF5;
+  --fm-block-lilac:  #F3F0FF;
+  --fm-block-coral:  #FFF4ED;
+
+
+  /* ─── 路由可视化（浅色版） ────────────────────────────────────── */
+  --fm-route-line-active:  var(--fm-primary);
+  --fm-route-line-queued:  var(--fm-text-4);
+  --fm-route-line-spent:   var(--fm-text-4);
+  --fm-route-glow:         var(--fm-primary-glow);
+  --fm-route-node-active-bg:  rgba(0, 168, 84, 0.06);
+  --fm-route-node-queued-bg:  transparent;
+  --fm-route-node-border-active: var(--fm-primary);
+  --fm-route-node-border-queued: var(--fm-border-default);
+
+
+  /* ─── shadcn 浅色映射 ────────────────────────────────────────── */
+  --background:         var(--fm-bg-canvas);
+  --foreground:         var(--fm-text-1);
+  --card:               var(--fm-bg-elevated);
+  --card-foreground:    var(--fm-text-1);
+  --popover:            var(--fm-bg-elevated);
+  --popover-foreground: var(--fm-text-1);
+  --primary:            var(--fm-primary);
+  --primary-foreground: #FFFFFF;
+  --secondary:          var(--fm-bg-hover);
+  --secondary-foreground:var(--fm-text-1);
+  --muted:              var(--fm-bg-hover);
+  --muted-foreground:   var(--fm-text-3);
+  --accent:             var(--fm-bg-active);
+  --accent-foreground:  var(--fm-text-1);
+  --destructive:        var(--fm-error);
+  --destructive-foreground: #FFFFFF;
+  --border:             var(--fm-border-default);
+  --input:              var(--fm-border-default);
+  --ring:               var(--fm-primary);
+
+  --sidebar:                    var(--fm-bg-canvas);
+  --sidebar-foreground:         var(--fm-text-2);
+  --sidebar-primary:            var(--fm-primary);
+  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-accent:             var(--fm-bg-hover);
+  --sidebar-accent-foreground:  var(--fm-text-1);
+  --sidebar-border:             var(--fm-border-subtle);
+  --sidebar-ring:               var(--fm-primary);
+
+  --chart-1: #00A854;
+  --chart-2: #0EA5E9;
+  --chart-3: #F59E0B;
+  --chart-4: #EF4444;
+  --chart-5: #8B5CF6;
+}
+
+
+/* =====================================================================
+ * 3. SYSTEM PREFERENCE FALLBACK
+ *    用户没有手动选 → 跟随系统
+ *    （如果用户已选 [data-theme]，本块不生效）
+ * ===================================================================== */
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]):not([data-theme="light"]) {
+    /* 复制一份 [data-theme="light"] 的所有 token */
+    /* 实施时这里写完整副本，让 :root 默认值被覆盖 */
+    /* —— Build 阶段会把这块自动展开 —— */
+  }
+}
+
+
+/* =====================================================================
+ * 4. 类型工具类（替代旧 .fm-* 类）
+ * ===================================================================== */
+
+/* 西文 / 数字 / 技术字符串 - 默认走 sans，特殊场景用 mono */
+.fm-text-tech {
+  font-family: var(--fm-font-tech);
+  font-feature-settings: "tnum" 1, "ss01" 1;   /* tabular nums for alignment */
+  letter-spacing: 0;
+}
+
+/* 中文场景 - 强制最小 14px */
+.fm-text-zh {
+  font-family: var(--fm-font-zh);
+  font-size: var(--fm-text-md);
+  line-height: var(--fm-leading-snug);
+}
+
+/* Eyebrow - 全大写小标签 */
+.fm-text-eyebrow {
+  font-family: var(--fm-font-tech);
+  font-size: var(--fm-text-2xs);
+  font-weight: var(--fm-weight-medium);
+  letter-spacing: var(--fm-tracking-wide);
+  text-transform: uppercase;
+  color: var(--fm-text-3);
+}
+
+/* Caption - 时间戳 / 元数据 */
+.fm-text-caption {
+  font-family: var(--fm-font-tech);
+  font-size: var(--fm-text-xs);
+  color: var(--fm-text-3);
+  font-feature-settings: "tnum" 1;
+}
+
+/* Body */
+.fm-text-body {
+  font-size: var(--fm-text-base);
+  line-height: var(--fm-leading-snug);
+  color: var(--fm-text-1);
+}
+
+/* Heading */
+.fm-text-heading {
+  font-size: var(--fm-text-xl);
+  font-weight: var(--fm-weight-semibold);
+  line-height: var(--fm-leading-tight);
+  letter-spacing: var(--fm-tracking-tight);
+  color: var(--fm-text-1);
+}
+
+
+/* =====================================================================
+ * 5. 减少动效偏好
+ * ===================================================================== */
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --fm-dur-instant: 0ms;
+    --fm-dur-fast:    0ms;
+    --fm-dur-normal:  0ms;
+    --fm-dur-slow:    0ms;
+    --fm-dur-slower:  0ms;
+  }
+}
+
+
+/* =====================================================================
+ * 注释：从旧 token 系统的迁移说明
+ * ---------------------------------------------------------------------
+ * 删除：
+ *   --fm-canvas / --fm-surface / --fm-surface-hi / --fm-surface-low
+ *   --fm-surface-wash / --fm-border / --fm-border-soft
+ *   --fm-block-{green,teal,lime,sage,cream,navy}
+ *   --fm-magenta / --fm-magenta-subtle
+ *   --fm-ink-{strong,base,muted,subtle,faint,ghost,hover-bg}
+ *   --fm-color-* 全部 legacy alias
+ *
+ * 改名：
+ *   --fm-canvas       → --fm-bg-canvas
+ *   --fm-surface      → --fm-bg-surface
+ *   --fm-surface-hi   → --fm-bg-elevated
+ *   --fm-surface-low  → --fm-bg-hover
+ *   --fm-text-1..4    → 保留同名（值改了）
+ *
+ * 新增：
+ *   --fm-bg-input / --fm-bg-overlay
+ *   --fm-border-{subtle,default,strong,emphasis}（4 级，原来只 2 级）
+ *   --fm-route-* 路由可视化专用
+ *   --fm-block-mint/lilac/coral（保留 3 个，原 9 个）
+ *   --fm-primary-glow（路由动画光晕）
+ *   --fm-ease-emphasis / --fm-ease-flow（路由动画专用缓动）
+ *
+ * 圆角：
+ *   sm: 6→4 / md: 10→6 / lg: 16→8 / xl: 20→12
+ *
+ * 字号：
+ *   西文 base: 16→13（中文场景 fm-text-zh 仍 14）
+ *   title:    22→18（中文场景酌情用 lg=16 或 xl=18）
+ * ===================================================================== */

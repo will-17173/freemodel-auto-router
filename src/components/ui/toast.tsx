@@ -1,8 +1,7 @@
 import React from "react"
 import { X } from "lucide-react"
-import { cn } from "@/lib/utils"
 
-type ToastType = "success" | "error" | "info"
+type ToastType = "success" | "error" | "info" | "warn"
 
 interface Toast {
   id: number
@@ -22,13 +21,26 @@ export function useToast() {
   return ctx
 }
 
+const TOAST_BAR_COLOR: Record<ToastType, string> = {
+  success: "var(--fm-success)",
+  error: "var(--fm-error)",
+  warn: "var(--fm-warning)",
+  info: "var(--fm-primary)",
+}
+
+const TOAST_TEXT_COLOR: Record<ToastType, string> = {
+  success: "var(--fm-success-text)",
+  error: "var(--fm-error-text)",
+  warn: "var(--fm-warning-text)",
+  info: "var(--fm-primary-text)",
+}
+
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = React.useState<Toast[]>([])
 
   const showToast = (type: ToastType, message: string) => {
     const id = Date.now()
     setToasts(prev => [...prev, { id, type, message }])
-    // 3秒后自动消失
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id))
     }, 3000)
@@ -41,28 +53,47 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
-      {/* Toast container */}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      <div
+        className="fixed bottom-4 right-4 z-50 flex flex-col gap-2"
+        aria-live="polite"
+        aria-label="通知"
+      >
         {toasts.map(toast => (
           <div
             key={toast.id}
-            className={cn(
-              "flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg animate-in slide-in-from-right-5 fade-in",
-              "text-sm max-w-[400px]",
-              toast.type === "success"
-                ? "bg-[var(--fm-success)] text-white"
-                : toast.type === "error"
-                  ? "bg-destructive text-destructive-foreground"
-                  : "bg-primary/90 text-primary-foreground"
-            )}
+            className="flex items-center gap-2 animate-in slide-in-from-right-5 fade-in overflow-hidden"
+            style={{
+              background: "var(--fm-bg-elevated)",
+              border: "1px solid var(--fm-border-default)",
+              borderRadius: "var(--fm-r-md)",
+              maxWidth: "360px",
+              minWidth: "200px",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.4)",
+              borderLeft: `2px solid ${TOAST_BAR_COLOR[toast.type]}`,
+            }}
+            role="alert"
           >
-            <span className="flex-1">{toast.message}</span>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="opacity-70 hover:opacity-100"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center gap-2 px-3 py-2.5 flex-1 min-w-0">
+              <span
+                className="fm-text-zh flex-1 min-w-0"
+                style={{
+                  fontSize: "var(--fm-text-sm)",
+                  color: TOAST_TEXT_COLOR[toast.type],
+                  wordBreak: "break-word",
+                }}
+              >
+                {toast.message}
+              </span>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="flex-shrink-0 flex items-center justify-center h-5 w-5 rounded transition-colors"
+                style={{ color: "var(--fm-text-4)", background: "transparent", border: "none", cursor: "pointer" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--fm-text-1)"; e.currentTarget.style.background = "var(--fm-bg-hover)" }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--fm-text-4)"; e.currentTarget.style.background = "transparent" }}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
           </div>
         ))}
       </div>

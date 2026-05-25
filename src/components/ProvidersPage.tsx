@@ -177,58 +177,62 @@ export function ProvidersPage({
       <div className="flex-1 flex overflow-hidden">
         {/* 服务商卡片网格 */}
         <div className={cn(
-          "flex-1 p-6 overflow-auto bg-background transition-[margin-right] duration-300 ease-out",
-          editPanelMode && "mr-[280px]"
-        )}>
+          "flex-1 p-4 overflow-auto transition-[margin-right] duration-200 ease-out",
+          editPanelMode && "mr-[260px]"
+        )}
+        style={{ background: "var(--fm-bg-canvas)" }}
+        >
           {/* Header */}
-          <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <h1 className="text-lg font-semibold">服务商</h1>
+              <h1 className="fm-text-zh" style={{ fontSize: "var(--fm-text-md)", fontWeight: "var(--fm-weight-semibold)", color: "var(--fm-text-1)" }}>服务商</h1>
               <button
                 onClick={() => setShowInfoModal(true)}
-                className="p-1 text-muted-foreground hover:text-primary transition-colors"
+                className="inline-flex h-6 w-6 items-center justify-center rounded transition-colors"
+                style={{ color: "var(--fm-text-4)", background: "transparent", border: "none", cursor: "pointer" }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = "var(--fm-primary-text)" }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = "var(--fm-text-4)" }}
               >
-                <Info className="h-4 w-4" />
+                <Info className="h-3.5 w-3.5" />
               </button>
             </div>
             <button
               onClick={onAddProvider}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground text-sm font-medium rounded-lg hover:bg-primary/90 transition-colors"
+              className="fm-btn-primary flex items-center gap-1.5"
             >
-              <Plus className="h-3.5 w-3.5" />
-              添加服务商
+              <Plus className="h-3 w-3" />
+              <span className="fm-text-zh">添加服务商</span>
             </button>
           </div>
 
           {/* Grid */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             {providers.map((provider) => (
               <div
                 key={provider.id}
                 className={cn(
-                  "bg-card rounded-xl border p-5 transition-all shadow-[0_1px_2px_rgba(16,24,20,0.04),0_12px_28px_rgba(16,24,20,0.06)]",
-                  authMap[provider.id]
-                    ? "border-primary/25 hover:border-primary/45 hover:shadow-[0_1px_2px_rgba(16,24,20,0.04),0_18px_36px_rgba(16,24,20,0.09)]"
-                    : "border-border hover:border-primary/35 hover:shadow-[0_1px_2px_rgba(16,24,20,0.04),0_18px_36px_rgba(16,24,20,0.09)]"
+                  "fm-provider-card",
+                  authMap[provider.id] && "is-active"
                 )}
               >
                 {/* Card header */}
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     {authMap[provider.id] && (
-                      <span className="w-2 h-2 rounded-full bg-primary shrink-0" />
+                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--fm-primary)" }} />
                     )}
-                    <span className="font-semibold text-sm text-foreground">{provider.name}</span>
+                    <span className="fm-text-zh font-medium truncate" style={{ fontSize: "var(--fm-text-sm)", color: "var(--fm-text-1)", fontWeight: "var(--fm-weight-medium)" }}>{provider.name}</span>
                     {provider.link && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button
-                            className="inline-flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded flex-shrink-0 transition-colors"
                             onClick={() => openProviderLink(provider.link!)}
-                            title="打开服务商网站"
-                            aria-label="打开服务商网站"
+                            style={{ color: "var(--fm-text-4)", background: "transparent", border: "none", cursor: "pointer" }}
+                            onMouseEnter={(e) => { e.currentTarget.style.color = "var(--fm-primary-text)" }}
+                            onMouseLeave={(e) => { e.currentTarget.style.color = "var(--fm-text-4)" }}
                           >
-                            <ExternalLink className="h-3.5 w-3.5" />
+                            <ExternalLink className="h-3 w-3" />
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>打开服务商网站</TooltipContent>
@@ -236,14 +240,16 @@ export function ProvidersPage({
                     )}
                     {/* 添加模型按钮 */}
                     <button
-                      className="text-xs px-2 py-1 rounded-full border border-dashed border-border text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                      className="fm-text-tech flex-shrink-0 transition-colors"
                       onClick={() => onAddModel(provider.id)}
-                      title="添加模型"
+                      style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "var(--fm-r-pill)", border: "1px dashed var(--fm-border-default)", color: "var(--fm-text-4)", background: "transparent", cursor: "pointer" }}
+                      onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--fm-primary-border)"; e.currentTarget.style.color = "var(--fm-primary-text)" }}
+                      onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--fm-border-default)"; e.currentTarget.style.color = "var(--fm-text-4)" }}
                     >
                       + 模型
                     </button>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
                     {/* 测试连接按钮 */}
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -251,33 +257,39 @@ export function ProvidersPage({
                           onClick={() => handleTest(provider.id)}
                           disabled={!authMap[provider.id] || testStates[provider.id]?.status === "testing"}
                           className={cn(
-                            "flex items-center justify-center w-7 h-7 rounded-full border transition-colors",
+                            "flex items-center justify-center w-6 h-6 rounded transition-colors",
                             testStates[provider.id]?.status === "success"
-                              ? "border-[color:var(--fm-success)] bg-[var(--fm-success-subtle)] text-[color:var(--fm-success-text)]"
+                              ? "is-success"
                               : testStates[provider.id]?.status === "error"
-                                ? "border-destructive/50 bg-destructive/10 text-destructive"
-                                : "border-border bg-muted/50 text-muted-foreground hover:border-primary hover:text-primary",
-                            !authMap[provider.id] && "opacity-50 cursor-not-allowed"
+                                ? "is-error"
+                                : ""
                           )}
+                          style={{
+                            border: `1px solid ${testStates[provider.id]?.status === "success" ? "var(--fm-success-border)" : testStates[provider.id]?.status === "error" ? "var(--fm-error-border)" : "var(--fm-border-default)"}`,
+                            color: testStates[provider.id]?.status === "success" ? "var(--fm-success-text)" : testStates[provider.id]?.status === "error" ? "var(--fm-error-text)" : "var(--fm-text-4)",
+                            background: testStates[provider.id]?.status === "success" ? "var(--fm-success-subtle)" : testStates[provider.id]?.status === "error" ? "var(--fm-error-subtle)" : "transparent",
+                            opacity: !authMap[provider.id] ? 0.5 : 1,
+                            cursor: !authMap[provider.id] ? "not-allowed" : "pointer",
+                          }}
                         >
                           {testStates[provider.id]?.status === "testing" ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            <Loader2 className="h-3 w-3 animate-spin" />
                           ) : testStates[provider.id]?.status === "success" ? (
-                            <Check className="h-3.5 w-3.5" />
+                            <Check className="h-3 w-3" />
                           ) : testStates[provider.id]?.status === "error" ? (
-                            <X className="h-3.5 w-3.5" />
+                            <X className="h-3 w-3" />
                           ) : (
-                            <Zap className="h-3.5 w-3.5" />
+                            <Zap className="h-3 w-3" />
                           )}
                         </button>
                       </TooltipTrigger>
                       <TooltipContent>
-                        {!authMap[provider.id] ? "请先配置 API Key" : "测试"}
+                        {!authMap[provider.id] ? "请先配置 API Key" : "测试连接"}
                       </TooltipContent>
                     </Tooltip>
                     {/* 延迟显示 */}
                     {testStates[provider.id]?.result?.latency_ms && (
-                      <span className="text-xs font-mono text-muted-foreground">
+                      <span className="fm-text-tech" style={{ fontSize: "10px", color: "var(--fm-text-4)" }}>
                         {testStates[provider.id]?.result?.latency_ms}ms
                       </span>
                     )}
@@ -285,14 +297,16 @@ export function ProvidersPage({
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button
-                            className="flex items-center justify-center w-7 h-7 rounded-full border border-border bg-muted/50 text-muted-foreground hover:border-destructive hover:text-destructive hover:bg-destructive/10 transition-colors"
+                            className="flex items-center justify-center w-6 h-6 rounded transition-colors"
+                            style={{ border: "1px solid var(--fm-border-default)", color: "var(--fm-text-4)", background: "transparent", cursor: "pointer" }}
                             onClick={(e) => {
                               e.stopPropagation();
-                              console.log("onDeleteProvider clicked:", provider.id);
                               onDeleteProvider(provider.id);
                             }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--fm-error-border)"; e.currentTarget.style.color = "var(--fm-error-text)"; e.currentTarget.style.background = "var(--fm-error-subtle)" }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--fm-border-default)"; e.currentTarget.style.color = "var(--fm-text-4)"; e.currentTarget.style.background = "transparent" }}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-3 w-3" />
                           </button>
                         </TooltipTrigger>
                         <TooltipContent>删除服务商</TooltipContent>
@@ -300,19 +314,27 @@ export function ProvidersPage({
                     )}
                     <button
                       className={cn(
-                        "text-xs px-2.5 py-1 rounded-full border transition-colors",
-                        authMap[provider.id]
-                          ? "border-primary/40 text-primary bg-primary/10 hover:border-primary hover:bg-primary/20"
-                          : "border-border text-muted-foreground hover:border-primary hover:text-primary"
+                        "fm-text-tech transition-colors",
+                        authMap[provider.id] ? "is-keyed" : ""
                       )}
                       onClick={() => onConfigKey(provider.id)}
+                      style={{
+                        fontSize: "10px",
+                        padding: "3px 8px",
+                        borderRadius: "var(--fm-r-pill)",
+                        border: `1px solid ${authMap[provider.id] ? "var(--fm-primary-border)" : "var(--fm-border-default)"}`,
+                        color: authMap[provider.id] ? "var(--fm-primary-text)" : "var(--fm-text-4)",
+                        background: authMap[provider.id] ? "var(--fm-primary-subtle)" : "transparent",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                      }}
                     >
                       {authMap[provider.id] ? "✓ Key" : "配置 Key"}
                     </button>
                   </div>
                 </div>
                 {provider.description && (
-                  <p className="text-[10px] text-muted-foreground/70 mb-2 -mt-1 leading-snug">{provider.description}</p>
+                  <p className="fm-text-zh mb-2 -mt-1 leading-snug" style={{ fontSize: "10px", color: "var(--fm-text-4)" }}>{provider.description}</p>
                 )}
                 {/* Models */}
                 {(() => {
@@ -323,16 +345,13 @@ export function ProvidersPage({
 
                   return (
                     <div className="relative">
-                      <div className={cn(
-                        "flex flex-wrap gap-1.5 transition-all duration-200",
-                        !isExpanded && needsCollapse && "max-h-[60px] overflow-hidden"
-                      )}>
+                      <div className="flex flex-wrap gap-1">
                         {visibleModels.map((model) => {
                           const deletable = canDeleteModel(provider, model)
                           const displayName = splitModelDisplayName(model.name)
 
                           return (
-                          <div key={model.id} className="flex items-center gap-1">
+                          <div key={model.id} className="flex items-center gap-0.5">
                             <button
                               disabled={!authMap[provider.id] || !editPanelMode}
                               onClick={() => authMap[provider.id] && editPanelMode && onAddToQueue(provider.id, model.id)}
@@ -370,16 +389,19 @@ export function ProvidersPage({
                       {needsCollapse && (
                         <button
                           onClick={() => toggleExpand(provider.id)}
-                          className="mt-2 text-xs text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
+                          className="mt-1.5 fm-text-tech inline-flex items-center gap-1 transition-colors"
+                          style={{ fontSize: "10px", color: "var(--fm-text-4)", background: "transparent", border: "none", cursor: "pointer" }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = "var(--fm-primary-text)" }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = "var(--fm-text-4)" }}
                         >
                           {isExpanded ? (
                             <>
-                              <ChevronUp className="h-3.5 w-3.5" />
+                              <ChevronUp className="h-3 w-3" />
                               收起
                             </>
                           ) : (
                             <>
-                              <ChevronDown className="h-3.5 w-3.5" />
+                              <ChevronDown className="h-3 w-3" />
                               展开 ({models.length - MAX_VISIBLE_MODELS} 更多)
                             </>
                           )}

@@ -14,8 +14,6 @@ import {
   arrayMove,
 } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { cn } from "@/lib/utils"
 import { queueItemKey } from "@/lib/queue"
 import type { DraftItem, Provider } from "@/types"
@@ -122,51 +120,63 @@ export function QueueEditPanel({
   return (
     <div
       className={cn(
-        "fixed right-0 top-12 bottom-0 w-[280px] border-l border-border bg-[var(--fm-surface-wash)] shadow-2xl z-40",
-        "transition-transform duration-300 ease-in-out",
+        "fixed right-0 top-12 bottom-0 w-[260px] z-40",
+        "transition-transform duration-200 ease-in-out",
         open ? "translate-x-0" : "translate-x-full"
       )}
+      style={{
+        borderLeft: "1px solid var(--fm-border-default)",
+        background: "var(--fm-bg-surface)",
+      }}
     >
       <div className="flex flex-col h-full">
-        <div className="p-4 border-b border-border bg-card">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-sm">
+        {/* Header */}
+        <div
+          className="p-3"
+          style={{ borderBottom: "1px solid var(--fm-border-default)" }}
+        >
+          <div className="flex items-center justify-between mb-2.5">
+            <h2
+              className="fm-text-zh"
+              style={{ fontWeight: "var(--fm-weight-semibold)", color: "var(--fm-text-1)" }}
+            >
               {mode === "new" ? "新建队列" : "编辑队列"}
             </h2>
             <button
               onClick={onClose}
-              className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="h-6 w-6 rounded flex items-center justify-center transition-colors"
+              style={{ color: "var(--fm-text-4)", background: "transparent", border: "none", cursor: "pointer" }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--fm-text-1)"; e.currentTarget.style.background = "var(--fm-bg-hover)" }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--fm-text-4)"; e.currentTarget.style.background = "transparent" }}
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5" />
             </button>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground shrink-0">队列名:</span>
-            <Input
+            <span className="fm-text-tech flex-shrink-0" style={{ fontSize: "var(--fm-text-xs)", color: "var(--fm-text-3)" }}>名称</span>
+            <input
               value={queueName}
               onChange={(e) => onQueueNameChange(e.target.value)}
-              placeholder="输入队列名称"
-              className="h-8 text-sm"
+              placeholder="队列名称"
+              className="fm-input flex-1"
+              style={{ height: "28px", padding: "4px 8px" }}
             />
           </div>
         </div>
 
-        <div className="flex-1 overflow-auto p-4">
-          <div className="text-xs font-medium text-muted-foreground mb-2">
-            队列项 ({items.length} 项)
+        {/* Items */}
+        <div className="flex-1 overflow-auto p-3">
+          <div className="fm-text-tech mb-2" style={{ fontSize: "10px", color: "var(--fm-text-4)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+            队列项 ({items.length})
           </div>
           {items.length === 0 ? (
-            <div className="text-sm text-muted-foreground text-center py-8">
+            <div className="fm-text-zh text-center py-8" style={{ color: "var(--fm-text-4)" }}>
               点击左侧模型添加
             </div>
           ) : (
-            <DndContext
-              sensors={sensors}
-              collisionDetection={closestCenter}
-              onDragEnd={handleDragEnd}
-            >
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
               <SortableContext items={ids} strategy={verticalListSortingStrategy}>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   {items.map((item, i) => {
                     const display = getItemDisplay(item)
                     return (
@@ -186,22 +196,24 @@ export function QueueEditPanel({
           )}
         </div>
 
-        <div className="p-4 border-t border-border bg-card">
+        {/* Footer */}
+        <div className="p-3" style={{ borderTop: "1px solid var(--fm-border-default)" }}>
           {items.length > 0 && (
             <button
               onClick={onClearAll}
-              className="text-xs text-muted-foreground hover:text-destructive mb-3 transition-colors block"
+              className="fm-text-tech block mb-2.5 transition-colors"
+              style={{ fontSize: "var(--fm-text-xs)", color: "var(--fm-text-4)", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+              onMouseEnter={(e) => { e.currentTarget.style.color = "var(--fm-error-text)" }}
+              onMouseLeave={(e) => { e.currentTarget.style.color = "var(--fm-text-4)" }}
             >
               清空全部
             </button>
           )}
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="flex-1" onClick={onCancel}>
-              取消
-            </Button>
-            <Button size="sm" className="flex-1" onClick={onSave}>
-              {mode === "new" ? "保存创建" : "保存修改"}
-            </Button>
+            <button className="fm-btn-secondary flex-1" onClick={onCancel}>取消</button>
+            <button className="fm-btn-primary flex-1" onClick={onSave}>
+              {mode === "new" ? "创建" : "保存"}
+            </button>
           </div>
         </div>
       </div>
